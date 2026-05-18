@@ -1288,3 +1288,20 @@ tbody td {
 .column-chip.is-builtin.active {
   border-style: solid;
 }
+
+.cell-region {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+}
+
+/* Explicit mark-contacted row, decoupled from channel link clicks */
+.mark-contacted-row {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+.mark-contacted-btn {
+  width: 100%;
+}

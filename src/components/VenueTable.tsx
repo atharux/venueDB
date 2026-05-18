@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Venue, City, Category, OutreachStatus, Tag } from '../types'
-import { CITIES, CATEGORIES, STATUSES, STATUS_LABEL, TAGS } from '../types'
+import { CITIES, CATEGORIES, STATUSES, STATUS_LABEL, TAGS, REGIONS, getRegion } from '../types'
 import { facebookUrl, instagramUrl, websiteUrl } from '../outreach'
 
 interface Props {
@@ -12,10 +12,11 @@ interface Props {
     category?: Category | ''
     status?: OutreachStatus | ''
     tag?: Tag | ''
+    region?: string | ''
   }
 }
 
-type SortKey = 'name' | 'city' | 'category' | 'status' | 'luxury' | 'updated'
+type SortKey = 'name' | 'city' | 'region' | 'category' | 'status' | 'luxury' | 'updated'
 const PINNED_COLUMNS_KEY = 'venue-table-pinned-columns-v1'
 
 // Built-in togglable contact columns. Each has a render() that returns a
@@ -100,6 +101,7 @@ const BUILTIN_BY_KEY = new Map(BUILTIN_COLUMNS.map(c => [c.key, c]))
 export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Props) {
   const [query, setQuery] = useState('')
   const [cityFilter, setCityFilter] = useState<City | ''>(initialFilters?.city ?? '')
+  const [regionFilter, setRegionFilter] = useState<string | ''>(initialFilters?.region ?? '')
   const [categoryFilter, setCategoryFilter] = useState<Category | ''>(initialFilters?.category ?? '')
   const [statusFilter, setStatusFilter] = useState<OutreachStatus | ''>(initialFilters?.status ?? '')
   const [tagFilter, setTagFilter] = useState<Tag | ''>(initialFilters?.tag ?? '')
@@ -115,10 +117,11 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
   useEffect(() => {
     if (!initialFilters) return
     if (initialFilters.city !== undefined) setCityFilter(initialFilters.city)
+    if (initialFilters.region !== undefined) setRegionFilter(initialFilters.region)
     if (initialFilters.category !== undefined) setCategoryFilter(initialFilters.category)
     if (initialFilters.status !== undefined) setStatusFilter(initialFilters.status)
     if (initialFilters.tag !== undefined) setTagFilter(initialFilters.tag)
-  }, [initialFilters?.city, initialFilters?.category, initialFilters?.status, initialFilters?.tag, initialFilters])
+  }, [initialFilters?.city, initialFilters?.region, initialFilters?.category, initialFilters?.status, initialFilters?.tag, initialFilters])
 
   const availableDynamicColumns = useMemo(() => {
     const counts = new Map<string, number>()
@@ -162,6 +165,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
     const q = query.trim().toLowerCase()
     const out = venues.filter(v => {
       if (cityFilter && v.city !== cityFilter) return false
+      if (regionFilter && getRegion(v.city) !== regionFilter) return false
       if (categoryFilter && v.category !== categoryFilter) return false
       if (statusFilter && v.status !== statusFilter) return false
       if (tagFilter && !v.tags.includes(tagFilter)) return false
@@ -194,6 +198,8 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
           return a.name.localeCompare(b.name) * dir
         case 'city':
           return a.city.localeCompare(b.city) * dir
+        case 'region':
+          return getRegion(a.city).localeCompare(getRegion(b.city)) * dir
         case 'category':
           return a.category.localeCompare(b.category) * dir
         case 'status':
@@ -205,7 +211,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
       }
     })
     return out
-  }, [venues, query, cityFilter, categoryFilter, statusFilter, tagFilter, hasContactOnly, sortKey, sortDir])
+  }, [venues, query, cityFilter, regionFilter, categoryFilter, statusFilter, tagFilter, hasContactOnly, sortKey, sortDir])
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -228,6 +234,14 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
           onChange={e => setQuery(e.target.value)}
           className="search-input"
         />
+        <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)}>
+          <option value="">All regions</option>
+          {REGIONS.map(r => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
         <select value={cityFilter} onChange={e => setCityFilter(e.target.value as City | '')}>
           <option value="">All cities</option>
           {CITIES.map(c => (
@@ -325,6 +339,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
           <thead>
             <tr>
               <th onClick={() => toggleSort('name')}>Venue{arrow('name')}</th>
+              <th onClick={() => toggleSort('region')}>Region{arrow('region')}</th>
               <th onClick={() => toggleSort('city')}>City{arrow('city')}</th>
               <th onClick={() => toggleSort('category')}>Category{arrow('category')}</th>
               <th>Tags</th>
@@ -348,6 +363,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
                   <div className="cell-name-main">{v.name}</div>
                   {v.district ? <div className="cell-name-sub">{v.district}</div> : null}
                 </td>
+                <td className="cell-region">{getRegion(v.city)}</td>
                 <td>{v.city}</td>
                 <td>{v.category}</td>
                 <td>
@@ -387,7 +403,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
             ))}
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7 + activeColumns.length} className="empty-row">
+                <td colSpan={8 + activeColumns.length} className="empty-row">
                   No venues match. Clear filters or add one.
                 </td>
               </tr>

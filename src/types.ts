@@ -19,6 +19,83 @@ export const CITIES = [
 ] as const
 export type City = (typeof CITIES)[number] | (string & {})
 
+/**
+ * City → region grouping. A "region" is the level of geography that makes
+ * outreach sense for a single rep: Crete groups all Cretan cities, "Germany"
+ * groups Berlin/Hamburg/Munich/etc, "UK" groups London. The granularity is
+ * intentionally mixed (island vs country) so each market collapses to the
+ * cluster a user would actually filter by.
+ *
+ * Cities not in the map fall through to "Other" via getRegion(). Add new
+ * entries here as you import data from new markets — no schema change.
+ */
+export const CITY_TO_REGION: Record<string, string> = {
+  // Greece — Crete grouped as one region
+  Chania: 'Crete',
+  Heraklion: 'Crete',
+  Hersonissos: 'Crete',
+  Malia: 'Crete',
+  Rethymno: 'Crete',
+  'Agios Nikolaos': 'Crete',
+  Elounda: 'Crete',
+  Makrigialos: 'Crete',
+  Ammoudara: 'Crete',
+  // Germany
+  Berlin: 'Germany',
+  Hamburg: 'Germany',
+  Munich: 'Germany',
+  Cologne: 'Germany',
+  Frankfurt: 'Germany',
+  // France
+  Paris: 'France',
+  Lyon: 'France',
+  Marseille: 'France',
+  Nice: 'France',
+  // UK
+  London: 'UK',
+  Manchester: 'UK',
+  Bristol: 'UK',
+  Glasgow: 'UK',
+  // Netherlands
+  Amsterdam: 'Netherlands',
+  Rotterdam: 'Netherlands',
+  Utrecht: 'Netherlands',
+  // UAE
+  Dubai: 'UAE',
+  'Abu Dhabi': 'UAE',
+  // Spain
+  Barcelona: 'Spain',
+  Madrid: 'Spain',
+  Ibiza: 'Spain',
+  // Italy
+  Milan: 'Italy',
+  Rome: 'Italy',
+  // Portugal
+  Lisbon: 'Portugal',
+  Porto: 'Portugal',
+}
+
+/** Distinct regions in display order. "Other" is appended for unknown cities. */
+export const REGIONS: readonly string[] = (() => {
+  const seen = new Set<string>()
+  const list: string[] = []
+  // Preserve insertion order of CITY_TO_REGION values, deduped.
+  for (const region of Object.values(CITY_TO_REGION)) {
+    if (!seen.has(region)) {
+      seen.add(region)
+      list.push(region)
+    }
+  }
+  list.push('Other')
+  return list
+})()
+
+/** Resolve a city string (typed or free-form) to its region. */
+export function getRegion(city: string | undefined | null): string {
+  if (!city) return 'Other'
+  return CITY_TO_REGION[city.trim()] ?? 'Other'
+}
+
 export const CATEGORIES = [
   'Nightclub',
   'Beach Club',
