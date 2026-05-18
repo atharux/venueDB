@@ -9,7 +9,13 @@
 
 import { enrichLead } from '../../scraper-core'
 
-export const onRequestPost: PagesFunction = async ({ request }) => {
+interface Env {
+  // Optional. Set via Cloudflare Pages → Settings → Environment variables.
+  // Type: Encrypted. NO `VITE_` prefix — backend-only secret.
+  BRAVE_API_KEY?: string
+}
+
+export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const body = (await request.json().catch(() => null)) as {
       name?: unknown
@@ -38,7 +44,7 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
         phone: typeof body.phone === 'string' ? body.phone : undefined,
         notes: typeof body.notes === 'string' ? body.notes : undefined,
       },
-      { apiKey, model },
+      { apiKey, model, braveApiKey: env.BRAVE_API_KEY },
     )
 
     return Response.json(result)

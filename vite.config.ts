@@ -87,6 +87,9 @@ function intelApiPlugin() {
           {
             apiKey: headerValue(req.headers['x-openrouter-api-key']),
             model: headerValue(req.headers['x-openrouter-model']) || 'openrouter/auto',
+            // Read from process.env so local dev mirrors Cloudflare's env binding.
+            // Set BRAVE_API_KEY in your shell or a .env.local Vite picks up.
+            braveApiKey: process.env.BRAVE_API_KEY,
           },
         )
         sendJson(res, 200, result)

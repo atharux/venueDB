@@ -33,14 +33,27 @@ git init                                  # only if not already a repo
 git add .
 git status                                # confirm .env is NOT in the list (it's gitignored)
 git commit -m "Initial commit — Lead Intel Stack MVP"
+```
 
-# Create a new repo on github.com (private is fine), then:
+**Create the GitHub repo as EMPTY.** This matters. On github.com → New repository → name it → **uncheck** all three of: "Add a README file", "Add .gitignore", "Choose a license". You want a bare empty repo with no commits. If you check any of those boxes, GitHub creates an initial commit on the remote that your local clone doesn't have, and the first `git push` will be rejected ("Updates were rejected because the remote contains work that you do not have locally").
+
+Then connect and push:
+
+```bash
 git remote add origin git@github.com:<YOUR_HANDLE>/<REPO_NAME>.git
 git branch -M main
 git push -u origin main
 ```
 
 **Sanity check before pushing:** `git status` should NOT show `.env`. The `.gitignore` already excludes it, but if you used a different filename (e.g. `.env.local`), confirm it's not in the staged files.
+
+**If you already created the repo with auto-init and got the "rejected" error:** the remote has a throwaway README commit you don't need. Verify with `git fetch origin && git log origin/main --oneline -5` (should show ~1 commit). Then overwrite the remote:
+
+```bash
+git push --force-with-lease origin main
+```
+
+`--force-with-lease` is safer than `--force` — it refuses if anyone else pushed in between. Only use this when you're certain the remote has nothing valuable.
 
 ---
 
@@ -88,12 +101,37 @@ If both return JSON, you're done with the scraper. Open the deployed site in the
    - **Project URL** (e.g. `https://xxxxxxxx.supabase.co`)
    - **anon public** key (a long JWT — NOT the `service_role` one)
 4. Back in Cloudflare Pages dashboard → your project → **Settings** → **Environment variables** → add:
-   - `VITE_SUPABASE_URL = https://xxxxxxxx.supabase.co`
-   - `VITE_SUPABASE_ANON_KEY = eyJhbGc...`
+   - `VITE_SUPABASE_URL = https://xxxxxxxx.supabase.co` — **Plaintext** (the type, not encrypted)
+   - `VITE_SUPABASE_ANON_KEY = eyJhbGc...` — **Plaintext** (the type, not encrypted)
    - Apply to: **Production** AND **Preview**
+
+   **Why plaintext for both?** Any variable prefixed with `VITE_` gets baked into the client-side JS at build time — it's in the public bundle, downloadable by anyone via DevTools. Encrypting it in Cloudflare's storage doesn't change that. The Supabase **anon public** key is designed to be browser-exposed; security comes from Row-Level Security (see §6), not from hiding the key.
+
+   Rule for everything you'll add later: **`VITE_*` → Plaintext (public). No `VITE_` prefix → Encrypt (backend-only secret used inside Pages Functions, like an OpenRouter or scraper API key).** Never put your Supabase `service_role` key into Cloudflare env vars — it bypasses RLS and would destroy your database if leaked.
+
 5. Trigger a redeploy: Deployments tab → latest deployment → **Retry deployment**. Env vars only apply to new builds.
 
 After the redeploy: reload the public site. The storage badge in the header flips from `localStorage` to `Supabase` (green).
+
+---
+
+## 4b. Add Brave Search API for website discovery (5 min, recommended)
+
+Without this, bulk enrichment can only scrape rows that already have a `website` field. Imported rows without websites will log "no attempts" because there's no way to discover their URLs. Brave Search fills that gap — free tier, no card.
+
+1. https://api.search.brave.com/ → **Get Started** → sign up with email → confirm
+2. Pick the **Free** plan (2,000 queries/month, $0/mo, no card required)
+3. Dashboard → **API Keys** → **Add API Key** → name it `venuedb` → copy the key
+4. Cloudflare Pages → your project → Settings → Environment variables → add:
+   - Name: `BRAVE_API_KEY`
+   - Value: paste the key from step 3
+   - Type: **Encrypt** (NOT plaintext — backend-only secret, no `VITE_` prefix)
+   - Apply to: Production AND Preview
+5. Trigger a redeploy (Deployments → Retry deployment)
+
+Verify it's wired up: open `https://<project>.pages.dev/api/health` — `hasSearch` will still be `true` either way (DuckDuckGo is the fallback), so test by running enrichment on a row without a website. You'll know it's working when the per-row log starts showing real URLs being scraped instead of "no attempts".
+
+**How discovery works once Brave is live:** for each row missing a website, the scraper tries (a) Brave Search, (b) URL guessing from name + city TLD (`Tanzhaus West` in Berlin → tries `https://www.tanzhauswest.de` first), (c) DuckDuckGo as last resort. First hit wins.
 
 ---
 

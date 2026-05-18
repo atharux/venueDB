@@ -167,17 +167,128 @@ export async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
   return uniqByUrl(results).slice(0, 10)
 }
 
+/**
+ * Server-side search via Brave Search API. Free tier covers 2k queries/mo.
+ * Works from Cloudflare Workers IPs (unlike DuckDuckGo HTML, which blocks them).
+ * Requires a free key from https://api.search.brave.com/.
+ */
+export async function searchBrave(query: string, apiKey: string): Promise<SearchResult[]> {
+  const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10`
+  const res = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'Accept-Encoding': 'gzip',
+      'X-Subscription-Token': apiKey,
+    },
+  })
+  if (!res.ok) throw new Error(`Brave ${res.status}: ${await res.text().catch(() => res.statusText)}`)
+  const data = (await res.json()) as {
+    web?: { results?: Array<{ title: string; url: string; description: string }> }
+  }
+  return (data.web?.results ?? []).map(r => ({
+    title: r.title,
+    url: r.url,
+    description: r.description,
+  }))
+}
+
+/**
+ * Heuristic: turn a venue name into a likely homepage URL by combining a slug
+ * with common TLDs. Tries each candidate with a short-timeout GET and returns
+ * the first one that answers 2xx. Works surprisingly well for venues whose
+ * brand maps cleanly to a domain ("Tanzhaus West" → tanzhauswest.de).
+ *
+ * City-aware: Berlin → prefer .de, Paris → .fr, etc. Falls back to .com / .io.
+ * Returns the final URL after following redirects so we get the canonical form.
+ */
+export async function guessWebsiteFromName(
+  name: string,
+  city?: string,
+): Promise<string | undefined> {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '')
+  if (!slug || slug.length < 3) return undefined
+
+  const cityTlds: Record<string, string[]> = {
+    berlin: ['de', 'com', 'io', 'club'],
+    munich: ['de', 'com'],
+    hamburg: ['de', 'com'],
+    cologne: ['de', 'com'],
+    frankfurt: ['de', 'com'],
+    paris: ['fr', 'com', 'io'],
+    lyon: ['fr', 'com'],
+    amsterdam: ['nl', 'com', 'io'],
+    rotterdam: ['nl', 'com'],
+    dubai: ['ae', 'com', 'io'],
+    london: ['co.uk', 'com', 'io'],
+    chania: ['gr', 'com'],
+    heraklion: ['gr', 'com'],
+    rethymno: ['gr', 'com'],
+    hersonissos: ['gr', 'com'],
+    athens: ['gr', 'com'],
+  }
+  const cityKey = (city ?? '').toLowerCase().trim()
+  const tlds = cityTlds[cityKey] ?? ['com', 'io', 'co']
+
+  for (const tld of tlds) {
+    for (const prefix of ['https://www.', 'https://']) {
+      const candidate = `${prefix}${slug}.${tld}`
+      try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 3000)
+        const res = await fetch(candidate, {
+          method: 'GET',
+          headers: { 'User-Agent': USER_AGENT, Accept: 'text/html' },
+          redirect: 'follow',
+          signal: controller.signal,
+        })
+        clearTimeout(timer)
+        if (res.ok) {
+          // res.url is the post-redirect canonical URL.
+          // Cancel the body — we just needed the status + final URL.
+          await res.body?.cancel().catch(() => {})
+          return res.url
+        }
+      } catch {
+        // Network error or timeout — try the next candidate.
+      }
+    }
+  }
+  return undefined
+}
+
 export async function enrichLead(
   input: EnrichmentInput,
-  ai?: { apiKey?: string; model?: string },
+  opts?: { apiKey?: string; model?: string; braveApiKey?: string },
 ): Promise<EnrichmentResult> {
   const attempts: NonNullable<EnrichmentResult['attempts']> = []
 
-  // 1. Discover a website if the user didn't supply one.
-  const searchResults = input.website
-    ? []
-    : await searchDuckDuckGo(`${input.name} ${input.city ?? ''} official website contact`).catch(() => [])
-  const baseUrl = input.website ?? pickBestWebsite(searchResults)
+  // 1. Discover a website. Three-tier strategy:
+  //    a. Brave Search (server-side, real results) — if API key present
+  //    b. URL guessing (slug + common TLDs)         — no key required
+  //    c. DuckDuckGo HTML scrape                    — last-resort fallback
+  //    The first one to return a usable URL wins. Each tier is wrapped in
+  //    .catch so a failure cascades to the next.
+  let baseUrl = input.website
+  let searchResults: SearchResult[] = []
+
+  if (!baseUrl && opts?.braveApiKey) {
+    searchResults = await searchBrave(
+      `${input.name} ${input.city ?? ''} official website contact`,
+      opts.braveApiKey,
+    ).catch(() => [])
+    baseUrl = pickBestWebsite(searchResults)
+  }
+
+  if (!baseUrl) {
+    baseUrl = await guessWebsiteFromName(input.name, input.city).catch(() => undefined)
+  }
+
+  if (!baseUrl) {
+    searchResults = await searchDuckDuckGo(
+      `${input.name} ${input.city ?? ''} official website contact`,
+    ).catch(() => [])
+    baseUrl = pickBestWebsite(searchResults)
+  }
 
   if (!baseUrl) {
     return {
@@ -254,9 +365,9 @@ export async function enrichLead(
     attempts,
   }
 
-  if (!ai?.apiKey) return deterministic
+  if (!opts?.apiKey) return deterministic
 
-  const aiSelection = await selectWithOpenRouter(input, merged, searchResults, ai).catch(() => null)
+  const aiSelection = await selectWithOpenRouter(input, merged, searchResults, opts).catch(() => null)
   if (!aiSelection) return deterministic
 
   return {
