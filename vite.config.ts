@@ -8,6 +8,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { enrichLead, scrapeTarget, searchDuckDuckGo } from './scraper-core'
 
+import { cloudflare } from "@cloudflare/vite-plugin";
+
 const execFileAsync = promisify(execFile)
 
 function intelApiPlugin() {
@@ -184,5 +186,5 @@ async function detectPython() {
 }
 
 export default defineConfig({
-  plugins: [react(), intelApiPlugin()],
+  plugins: [react(), intelApiPlugin(), cloudflare()],
 })

@@ -7,8 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "local-api": "node local-api-server.mjs"
+    "preview": "npm run build && wrangler dev",
+    "local-api": "node local-api-server.mjs",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "react": "^19.2.6",
@@ -16,6 +17,7 @@
     "read-excel-file": "^5.8.8"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
     "@cloudflare/workers-types": "^4.20240502.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.12.3",
@@ -28,6 +30,7 @@
     "globals": "^17.6.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "wrangler": "^4.92.0"
   }
 }
