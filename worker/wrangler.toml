@@ -1,0 +1,16 @@
+name = "crete-scraper"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# After deploy, the worker URL becomes https://crete-scraper.<your-account>.workers.dev
+# Set this URL as VITE_SCRAPER_URL in the frontend .env.
+
+# Optional: bind a secret for Brave Search.
+# Set via: wrangler secret put BRAVE_API_KEY
+# Without it, /search returns 503 but /scrape still works.
+
+# CORS allowlist — comma-separated origins, or "*" for any.
+# Override per-environment for production.
+[vars]
+ALLOWED_ORIGINS = "*"
