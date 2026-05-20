@@ -94,6 +94,31 @@ const BUILTIN_COLUMNS: BuiltInColumn[] = [
         <span className="cell-empty">—</span>
       ),
   },
+  // Semantic columns — pulled from imported "WHY IT CONVERTS / Cap Range / Genre"
+  // headers or filled by the user / AI. Off by default to keep the row compact;
+  // pin them on when running outreach prioritization.
+  {
+    key: '__pitch_angle',
+    label: 'Pitch angle',
+    render: v =>
+      v.pitch_angle ? (
+        <span className="cell-pitch" title={v.pitch_angle}>{v.pitch_angle}</span>
+      ) : (
+        <span className="cell-empty">—</span>
+      ),
+  },
+  {
+    key: '__capacity',
+    label: 'Capacity',
+    render: v =>
+      v.capacity ? <span>{v.capacity}</span> : <span className="cell-empty">—</span>,
+  },
+  {
+    key: '__genre',
+    label: 'Genre',
+    render: v =>
+      v.genre ? <span>{v.genre}</span> : <span className="cell-empty">—</span>,
+  },
 ]
 
 const BUILTIN_BY_KEY = new Map(BUILTIN_COLUMNS.map(c => [c.key, c]))
@@ -180,6 +205,9 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
           v.instagram,
           v.email,
           v.music_type,
+          v.pitch_angle,
+          v.capacity,
+          v.genre,
           ...Object.values(v.custom_fields ?? {}),
           ...v.tags,
         ]

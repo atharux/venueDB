@@ -32,6 +32,18 @@ create table if not exists public.venues (
   updated_at      timestamptz not null default now()
 );
 
+-- ---------- Idempotent column additions ----------
+-- Safe to re-run on existing databases — ADD COLUMN IF NOT EXISTS is supported
+-- in Postgres 9.6+ (Supabase runs 15+). Each column lands once.
+alter table public.venues add column if not exists facebook    text;
+alter table public.venues add column if not exists pitch_angle text;
+alter table public.venues add column if not exists capacity    text;
+alter table public.venues add column if not exists genre       text;
+alter table public.venues add column if not exists entity_type text not null default 'venue' check (entity_type in ('venue', 'festival'));
+
+create index if not exists venues_entity_type_idx on public.venues (entity_type);
+create index if not exists venues_genre_idx       on public.venues (genre);
+
 create index if not exists venues_city_idx     on public.venues (city);
 create index if not exists venues_category_idx on public.venues (category);
 create index if not exists venues_status_idx   on public.venues (status);

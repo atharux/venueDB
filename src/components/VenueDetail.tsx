@@ -51,6 +51,30 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
         </button>
       </div>
 
+      {venue.pitch_angle ? (
+        <section className="detail-section pitch-angle-banner">
+          <div className="pitch-angle-label">Why this lead converts</div>
+          <div className="pitch-angle-text">{venue.pitch_angle}</div>
+        </section>
+      ) : null}
+
+      {venue.capacity || venue.genre ? (
+        <section className="detail-section detail-context-pills">
+          {venue.capacity ? (
+            <span className="context-pill">
+              <span className="context-pill-label">Capacity</span>
+              <span className="context-pill-value">{venue.capacity}</span>
+            </span>
+          ) : null}
+          {venue.genre ? (
+            <span className="context-pill">
+              <span className="context-pill-label">Genre</span>
+              <span className="context-pill-value">{venue.genre}</span>
+            </span>
+          ) : null}
+        </section>
+      ) : null}
+
       <section className="detail-section detail-hero">
         <div className="detail-stats-grid">
           <Metric label="Channels" value={`${channelCount}/4`} />
@@ -235,6 +259,34 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
       <section className="detail-section">
         <h3>Tags</h3>
         <TagEditor selected={venue.tags} onChange={tags => set('tags', tags)} />
+      </section>
+
+      <section className="detail-section">
+        <h3>Semantic context</h3>
+        <Field label="Pitch angle (why this lead converts)">
+          <textarea
+            rows={2}
+            value={venue.pitch_angle ?? ''}
+            placeholder={'e.g. "Tresor’s arty sister club; intimate; owner reads all DMs"'}
+            onChange={e => set('pitch_angle', e.target.value || undefined)}
+          />
+        </Field>
+        <div className="field-row">
+          <Field label="Capacity">
+            <input
+              value={venue.capacity ?? ''}
+              placeholder="e.g. 300-500"
+              onChange={e => set('capacity', e.target.value || undefined)}
+            />
+          </Field>
+          <Field label="Genre">
+            <input
+              value={venue.genre ?? ''}
+              placeholder="e.g. Techno / Experimental / Queer"
+              onChange={e => set('genre', e.target.value || undefined)}
+            />
+          </Field>
+        </div>
       </section>
 
       <section className="detail-section">

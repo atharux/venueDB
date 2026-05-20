@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useVenues } from './useVenues'
 import { Dashboard } from './components/Dashboard'
 import { VenueTable } from './components/VenueTable'
@@ -8,16 +8,23 @@ import { DiscoveryPanel } from './components/DiscoveryPanel'
 import { ScraperStatusBadge } from './components/ScraperStatusBadge'
 import { exportJson, resetLocalToSeed } from './storage'
 import { scraperEnabled } from './scraper'
-import type { City, Category, OutreachStatus, Tag } from './types'
+import type { City, Category, OutreachStatus, Tag, Venue } from './types'
 import './App.css'
 
-type TabId = 'venues' | 'dashboard' | 'discover'
+type EntityType = 'venue' | 'festival'
+type TabId = 'venues' | 'festivals' | 'dashboard' | 'discover'
 
 interface TableFilters {
   city?: City | ''
   category?: Category | ''
   status?: OutreachStatus | ''
   tag?: Tag | ''
+  region?: string | ''
+}
+
+/** Default to 'venue' for legacy rows that pre-date the entity_type field. */
+function entityOf(v: Venue): EntityType {
+  return v.entity_type === 'festival' ? 'festival' : 'venue'
 }
 
 export default function App() {
@@ -26,19 +33,35 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tableFilters, setTableFilters] = useState<TableFilters | undefined>(undefined)
 
+  // Split the dataset by entity_type so each tab gets its own slice. Same
+  // table, same indexes, just a virtual partition for the UI. New rows
+  // inherit the active tab's entity type via wrapping add/update.
+  const activeEntity: EntityType = tab === 'festivals' ? 'festival' : 'venue'
+  const scopedVenues = useMemo(
+    () => venues.filter(v => entityOf(v) === activeEntity),
+    [venues, activeEntity],
+  )
+
   const selected = venues.find(v => v.id === selectedId) ?? null
-  const existingNames = new Set(venues.map(v => v.name.toLowerCase()))
+  const existingNames = new Set(scopedVenues.map(v => v.name.toLowerCase()))
+
+  // Wrap add so new rows from Quick Add / scrape preview inherit the active
+  // tab's entity type. User can still override in the detail panel later.
+  const addScoped: typeof add = draft => add({ ...draft, entity_type: activeEntity })
 
   const drillDown = (filter: TableFilters) => {
     // Reset other filters when drilling — single-dimension focus is more
-    // intuitive when clicking a chart bar.
+    // intuitive when clicking a chart bar. Routes to the table tab matching
+    // the currently active entity so festival-mode dashboard click goes to
+    // the festivals tab, not venues.
     setTableFilters({
       city: filter.city ?? '',
+      region: filter.region ?? '',
       category: filter.category ?? '',
       status: filter.status ?? '',
       tag: filter.tag ?? '',
     })
-    setTab('venues')
+    setTab(activeEntity === 'festival' ? 'festivals' : 'venues')
   }
 
   return (
@@ -52,8 +75,17 @@ export default function App() {
           </div>
         </div>
         <nav className="tabs">
-          <button className={tab === 'venues' ? 'active' : ''} onClick={() => setTab('venues')}>
-            Venues <span className="count">{venues.length}</span>
+          <button
+            className={tab === 'venues' ? 'active' : ''}
+            onClick={() => { setTab('venues'); setTableFilters(undefined) }}
+          >
+            Venues <span className="count">{venues.filter(v => entityOf(v) === 'venue').length}</span>
+          </button>
+          <button
+            className={tab === 'festivals' ? 'active' : ''}
+            onClick={() => { setTab('festivals'); setTableFilters(undefined) }}
+          >
+            Festivals <span className="count">{venues.filter(v => entityOf(v) === 'festival').length}</span>
           </button>
           <button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}>
             Dashboard
@@ -108,19 +140,19 @@ export default function App() {
 
       <main className={`app-main ${selected ? 'with-detail' : ''}`}>
         <div className="main-pane">
-          {tab === 'venues' ? (
+          {tab === 'venues' || tab === 'festivals' ? (
             <VenueTable
-              venues={venues}
+              venues={scopedVenues}
               selectedId={selectedId}
               onSelect={setSelectedId}
               initialFilters={tableFilters}
             />
           ) : null}
           {tab === 'dashboard' ? (
-            <Dashboard venues={venues} onDrillDown={drillDown} onUpdateVenue={update} />
+            <Dashboard venues={scopedVenues} onDrillDown={drillDown} onUpdateVenue={update} />
           ) : null}
           {tab === 'discover' ? (
-            <DiscoveryPanel venues={venues} onAdd={add} onUpdate={update} existingNames={existingNames} />
+            <DiscoveryPanel venues={scopedVenues} onAdd={addScoped} onUpdate={update} existingNames={existingNames} />
           ) : null}
         </div>
 
@@ -145,7 +177,8 @@ export default function App() {
 
       <footer className="app-footer">
         <span>
-          {venues.length} venues · {storageMode === 'supabase' ? 'cloud sync' : 'browser-local'} ·
+          {scopedVenues.length} {activeEntity === 'festival' ? 'festivals' : 'venues'} ·
+          {' '}{storageMode === 'supabase' ? 'cloud sync' : 'browser-local'} ·
           Scraper {scraperEnabled ? 'online' : 'offline (set VITE_SCRAPER_URL in deployed mode)'}
         </span>
         <span className="muted">Battle School Venue Intel — MVP ops console</span>

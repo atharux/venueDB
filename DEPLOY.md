@@ -115,6 +115,24 @@ After the redeploy: reload the public site. The storage badge in the header flip
 
 ---
 
+## 4a. Migrate existing Supabase to the latest schema (1 min)
+
+If you ran the original `0001_venues.sql` before today's semantic-context update, run this in the Supabase SQL editor — it adds the new columns without touching existing data:
+
+```sql
+alter table public.venues add column if not exists facebook    text;
+alter table public.venues add column if not exists pitch_angle text;
+alter table public.venues add column if not exists capacity    text;
+alter table public.venues add column if not exists genre       text;
+alter table public.venues add column if not exists entity_type text not null default 'venue' check (entity_type in ('venue', 'festival'));
+create index if not exists venues_entity_type_idx on public.venues (entity_type);
+create index if not exists venues_genre_idx       on public.venues (genre);
+```
+
+Existing rows default to `entity_type = 'venue'` automatically. After this runs, re-import any spreadsheet that has a `WHY IT CONVERTS / Cap Range / Genre` column and the values now land in the typed fields (visible as a banner + pills in the venue detail panel) instead of `custom_fields`.
+
+---
+
 ## 4b. Add Brave Search API for website discovery (5 min, recommended)
 
 Without this, bulk enrichment can only scrape rows that already have a `website` field. Imported rows without websites will log "no attempts" because there's no way to discover their URLs. Brave Search fills that gap — free tier, no card.

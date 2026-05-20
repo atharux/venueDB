@@ -7,9 +7,14 @@ export interface ImportedLeadRow {
   category: Category
   website?: string
   instagram?: string
+  facebook?: string
   email?: string
   phone?: string
   notes?: string
+  // ---------- Semantic fields lifted from common spreadsheet shapes ----------
+  pitch_angle?: string
+  capacity?: string
+  genre?: string
   sourceLabel?: string
   custom_fields?: Record<string, string>
 }
@@ -20,9 +25,20 @@ const HEADER_ALIASES: Record<string, string[]> = {
   category: ['category', 'type', 'segment'],
   website: ['website', 'site', 'url', 'domain', 'web'],
   instagram: ['instagram', 'instagram handle', 'ig', 'ig handle', 'insta'],
-  email: ['email', 'e-mail', 'contact email'],
+  facebook: ['facebook', 'fb', 'facebook page', 'fb page'],
+  email: ['email', 'e-mail', 'contact email', 'booking email'],
   phone: ['phone', 'telephone', 'mobile', 'whatsapp'],
   notes: ['notes', 'description', 'comments', 'context'],
+  // Semantic fields — the "why this lead matters" intelligence.
+  // Includes the exact header from your uploaded Hydrat3 spreadsheet
+  // ("why it converts (key insight)") plus common variants.
+  pitch_angle: [
+    'pitch angle', 'pitch', 'rationale', 'insight', 'key insight',
+    'why it converts', 'why it converts (key insight)', 'why this converts',
+    'why this lead converts', 'angle', 'hook', 'unique value',
+  ],
+  capacity: ['capacity', 'cap', 'cap range', 'capacity range', 'size', 'attendance'],
+  genre: ['genre', 'genres', 'music', 'music genre', 'music type', 'programming', 'style'],
 }
 
 export function parseSpreadsheetText(text: string, fileName: string): ImportedLeadRow[] {
@@ -57,9 +73,13 @@ export function toVenueDraft(row: ImportedLeadRow): VenueDraft {
     category: row.category,
     website: row.website,
     instagram: row.instagram,
+    facebook: row.facebook,
     email: row.email,
     phone: row.phone,
     notes: row.notes,
+    pitch_angle: row.pitch_angle,
+    capacity: row.capacity,
+    genre: row.genre,
     has_djs: false,
     has_events: false,
     has_audio: false,
@@ -103,9 +123,13 @@ function toImportedLead(
     category,
     website: cleanUrl(get('website')),
     instagram: cleanHandle(get('instagram')),
+    facebook: get('facebook') || undefined,
     email: get('email') || undefined,
     phone: get('phone') || undefined,
     notes: get('notes') || undefined,
+    pitch_angle: get('pitch_angle') || undefined,
+    capacity: get('capacity') || undefined,
+    genre: get('genre') || undefined,
     sourceLabel: `import:${fileName}`,
     custom_fields: Object.keys(custom_fields).length > 0 ? custom_fields : undefined,
   }

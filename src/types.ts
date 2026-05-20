@@ -185,6 +185,14 @@ export interface Venue {
   facebook?: string  // page slug OR full URL — Detail panel handles both
   email?: string
   phone?: string
+  // ---------- Semantic context (first-class, not custom_fields) ----------
+  // These exist so the curated "why this lead converts" intelligence from
+  // imported spreadsheets gets surfaced in the UI instead of buried in
+  // custom_fields JSON. All optional — backfill on import or scraper enrich.
+  pitch_angle?: string  // one-line "why this venue converts" insight
+  capacity?: string     // free-form like "300-500" or "1200" or "outdoor"
+  genre?: string        // free-form music/programming descriptor
+  entity_type?: 'venue' | 'festival'  // table-level segmentation; default 'venue'
   booking_contact?: string
   music_type?: string
   has_djs: boolean
