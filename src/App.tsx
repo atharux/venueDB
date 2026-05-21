@@ -46,8 +46,10 @@ export default function App() {
   const existingNames = new Set(scopedVenues.map(v => v.name.toLowerCase()))
 
   // Wrap add so new rows from Quick Add / scrape preview inherit the active
-  // tab's entity type. User can still override in the detail panel later.
-  const addScoped: typeof add = draft => add({ ...draft, entity_type: activeEntity })
+  // tab's entity type AS A DEFAULT. Explicit entity_type in the draft (e.g.
+  // when an Import-as=Festival selector overrides) takes priority.
+  // Spread order matters: `entity_type: activeEntity` is the floor, draft wins.
+  const addScoped: typeof add = draft => add({ entity_type: activeEntity, ...draft })
 
   const drillDown = (filter: TableFilters) => {
     // Reset other filters when drilling — single-dimension focus is more
@@ -152,7 +154,13 @@ export default function App() {
             <Dashboard venues={scopedVenues} onDrillDown={drillDown} onUpdateVenue={update} />
           ) : null}
           {tab === 'discover' ? (
-            <DiscoveryPanel venues={scopedVenues} onAdd={addScoped} onUpdate={update} existingNames={existingNames} />
+            <DiscoveryPanel
+              venues={scopedVenues}
+              onAdd={addScoped}
+              onUpdate={update}
+              existingNames={existingNames}
+              defaultEntityType={activeEntity}
+            />
           ) : null}
         </div>
 

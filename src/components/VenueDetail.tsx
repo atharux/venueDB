@@ -142,6 +142,15 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
             ))}
           </select>
         </Field>
+        <Field label="Entity type">
+          <select
+            value={venue.entity_type ?? 'venue'}
+            onChange={e => set('entity_type', e.target.value as 'venue' | 'festival')}
+          >
+            <option value="venue">Venue</option>
+            <option value="festival">Festival</option>
+          </select>
+        </Field>
       </section>
 
       <section className="detail-section">

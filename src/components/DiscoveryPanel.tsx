@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { City, Category, Venue, VenueDraft } from '../types'
 import { CITIES, CATEGORIES } from '../types'
 import { SEARCH_LAUNCHERS, enrichLead, scrapeUrl, scraperEnabled, searchWeb, type SearchResult } from '../scraper'
@@ -11,6 +11,8 @@ interface Props {
   onAdd: (draft: VenueDraft) => Promise<Venue>
   onUpdate: (id: string, patch: Partial<Venue>) => Promise<void> | void
   existingNames: Set<string>
+  /** Default entity_type for new rows — usually the active tab. User can override per-import. */
+  defaultEntityType?: 'venue' | 'festival'
 }
 
 const SUGGESTED_QUERIES = [
@@ -24,8 +26,18 @@ const SUGGESTED_QUERIES = [
   'Amsterdam club event space official website',
 ]
 
-export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames }: Props) {
+export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, defaultEntityType = 'venue' }: Props) {
   const [aiSettings, setAiSettings] = useState(loadAiSettings)
+  // Per-import override so a festival sheet can be imported into the Festivals
+  // tab even if you forgot to switch tabs first. Selector defaults to the
+  // active tab; user can flip before clicking "Import and enrich".
+  const [importEntityType, setImportEntityType] = useState<'venue' | 'festival'>(defaultEntityType)
+  // Keep the selector in sync when the active tab changes (only if no import
+  // is currently staged — don't clobber a deliberate override mid-flight).
+  useEffect(() => {
+    setImportEntityType(prev => (prev === defaultEntityType ? prev : defaultEntityType))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultEntityType])
   const [query, setQuery] = useState('Berlin techno club official website')
   const [searching, setSearching] = useState(false)
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null)
@@ -101,6 +113,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames }: Props
       name,
       category: draftCategory,
       city: draftCity,
+      entity_type: importEntityType,
       website: scrapePreview.website,
       email: scrapePreview.email,
       instagram: scrapePreview.instagram,
@@ -141,6 +154,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames }: Props
       name: quickName.trim(),
       category: quickCategory,
       city: quickCity,
+      entity_type: importEntityType,
       instagram: quickInstagram.replace(/^@/, '') || undefined,
       website: quickWebsite.trim() || undefined,
       has_djs: false,
@@ -199,6 +213,11 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames }: Props
           await onUpdate(existing.id, {
             city: patch.city,
             category: patch.category,
+            // entity_type is intentionally overwritten by the import — that
+            // way an existing "Festival X" row mistakenly classified as a
+            // venue gets reclassified when the user re-imports it as a
+            // festival. Matches the same overwrite logic as city/category.
+            entity_type: importEntityType,
             website: existing.website ?? patch.website,
             instagram: existing.instagram ?? patch.instagram,
             email: existing.email ?? patch.email,
@@ -212,7 +231,10 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames }: Props
           })
           updated += 1
         } else {
-          await onAdd(patch)
+          // Explicit entity_type wins over addScoped's default (which is the
+          // active tab). Without this, importing a festival sheet from the
+          // Venues tab would silently land 302 rows in the wrong slice.
+          await onAdd({ ...patch, entity_type: importEntityType })
           created += 1
         }
 
@@ -303,6 +325,21 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames }: Props
           <p className="muted small">
             MVP path: export your sheet as CSV or TSV, upload it here, and the app will search for the official site plus scrape public contact fields for each row.
           </p>
+          <label className="field">
+            <span className="field-label">Import as</span>
+            <select
+              value={importEntityType}
+              onChange={event => setImportEntityType(event.target.value as 'venue' | 'festival')}
+            >
+              <option value="venue">Venues</option>
+              <option value="festival">Festivals</option>
+            </select>
+            <span className="muted small">
+              All rows in this import land in the <strong>{importEntityType === 'festival' ? 'Festivals' : 'Venues'}</strong> tab.
+              Quick Add and Save-scrape below also use this choice.
+              {importEntityType !== defaultEntityType ? ' Override differs from the active tab — that\'s on purpose.' : ''}
+            </span>
+          </label>
           <label className="field">
             <span className="field-label">CSV or TSV file</span>
             <input
