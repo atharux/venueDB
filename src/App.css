@@ -1305,3 +1305,65 @@ tbody td {
 .mark-contacted-btn {
   width: 100%;
 }
+
+/* =========================================================
+   FESTIVALS THEME — deep magenta accent so the Festivals
+   view is visually distinct from the tactical-green Venues
+   view at a glance. Triggered by .app.is-festivals which
+   is set in App.tsx when tab === 'festivals'.
+   ========================================================= */
+
+:root {
+  /* Festival palette — chosen to read distinct from --accent (forest green)
+     while still working against the warm parchment background. */
+  --festival-accent:        #8b3aa8;
+  --festival-accent-strong: #6b1f87;
+  --festival-accent-bg:     rgba(139, 58, 168, 0.12);
+  --festival-accent-border: rgba(139, 58, 168, 0.32);
+  --festival-ink:           #f7eaff;  /* light text on dark festival bg */
+}
+
+/* Whole-view re-tint: anywhere that reads --accent/--accent-bg/--accent-border
+   (status pills, chips, active filters, dashboard bar fills, scrape buttons,
+   focus rings, table selected row, link hovers) gets the festival color. */
+.app.is-festivals {
+  --accent:        var(--festival-accent);
+  --accent-bg:     var(--festival-accent-bg);
+  --accent-border: var(--festival-accent-border);
+}
+
+/* Subtle background tint on the main pane so the view feels different even
+   before you read the controls. Soft — don't overpower the data. */
+.app.is-festivals .app-main {
+  background:
+    radial-gradient(circle at top right, rgba(139, 58, 168, 0.10), transparent 28%),
+    linear-gradient(180deg, rgba(107, 31, 135, 0.05), transparent 18%);
+}
+
+/* Brand mark switches to festival color when on the Festivals tab so the
+   header reflects the active context. */
+.app.is-festivals .brand-mark {
+  background: var(--festival-accent-strong);
+  border-color: var(--festival-accent-strong);
+  color: var(--festival-ink);
+}
+
+/* Festivals tab button: always tinted (even when inactive) so users
+   associate the color with the tab at all times. Active state goes solid. */
+.tabs button.tab-festivals {
+  color: var(--festival-accent-strong);
+  border-color: var(--festival-accent-border);
+}
+.tabs button.tab-festivals:hover {
+  background: var(--festival-accent-bg);
+  color: var(--festival-accent-strong);
+  border-color: var(--festival-accent-border);
+}
+.tabs button.tab-festivals.active {
+  background: var(--festival-accent-strong);
+  color: var(--festival-ink);
+  border-color: var(--festival-accent-strong);
+}
+.tabs button.tab-festivals .count {
+  background: rgba(255, 255, 255, 0.18);
+}

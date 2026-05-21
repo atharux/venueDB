@@ -67,7 +67,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${tab === 'festivals' ? 'is-festivals' : ''}`}>
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark">BS</div>
@@ -84,7 +84,7 @@ export default function App() {
             Venues <span className="count">{venues.filter(v => entityOf(v) === 'venue').length}</span>
           </button>
           <button
-            className={tab === 'festivals' ? 'active' : ''}
+            className={`tab-festivals ${tab === 'festivals' ? 'active' : ''}`}
             onClick={() => { setTab('festivals'); setTableFilters(undefined) }}
           >
             Festivals <span className="count">{venues.filter(v => entityOf(v) === 'festival').length}</span>
