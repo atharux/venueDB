@@ -5,6 +5,7 @@ import { VenueTable } from './components/VenueTable'
 import { VenueDetail } from './components/VenueDetail'
 import { OutreachPanel } from './components/OutreachPanel'
 import { DiscoveryPanel } from './components/DiscoveryPanel'
+import { MapView } from './components/MapView'
 import { ScraperStatusBadge } from './components/ScraperStatusBadge'
 import { exportJson, resetLocalToSeed } from './storage'
 import { scraperEnabled } from './scraper'
@@ -12,7 +13,7 @@ import type { City, Category, OutreachStatus, Tag, Venue } from './types'
 import './App.css'
 
 type EntityType = 'venue' | 'festival'
-type TabId = 'venues' | 'festivals' | 'dashboard' | 'discover'
+type TabId = 'venues' | 'festivals' | 'dashboard' | 'discover' | 'map'
 
 interface TableFilters {
   city?: City | ''
@@ -95,6 +96,9 @@ export default function App() {
           <button className={tab === 'discover' ? 'active' : ''} onClick={() => setTab('discover')}>
             Discover {scraperEnabled ? null : <span className="badge-offline">offline</span>}
           </button>
+          <button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>
+            🗺 Map
+          </button>
         </nav>
         <div className="header-actions">
           <span className={`mode-badge mode-${storageMode}`} title={`Storage: ${storageMode}`}>
@@ -160,6 +164,13 @@ export default function App() {
               onUpdate={update}
               existingNames={existingNames}
               defaultEntityType={activeEntity}
+            />
+          ) : null}
+          {tab === 'map' ? (
+            <MapView
+              venues={venues}
+              onSelect={setSelectedId}
+              selectedId={selectedId}
             />
           ) : null}
         </div>

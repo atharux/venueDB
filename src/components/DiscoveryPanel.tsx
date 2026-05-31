@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { City, Category, Venue, VenueDraft } from '../types'
 import { CITIES, CATEGORIES } from '../types'
 import { SEARCH_LAUNCHERS, enrichLead, scrapeUrl, scraperEnabled, searchWeb, type SearchResult } from '../scraper'
-import { findExistingVenueByName, toVenueDraft, type ImportedLeadRow } from '../importCsv'
+import { classifyEntityType, findExistingVenueByName, toVenueDraft, type ImportedLeadRow } from '../importCsv'
 import { DEFAULT_AI_SETTINGS, loadAiSettings, saveAiSettings } from '../aiSettings'
 import { parseUploadedSpreadsheet } from '../importApi'
+import { scanRegion, type RegionScanResult } from '../regionScan'
 
 interface Props {
   venues: Venue[]
@@ -31,10 +32,13 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
   // Per-import override so a festival sheet can be imported into the Festivals
   // tab even if you forgot to switch tabs first. Selector defaults to the
   // active tab; user can flip before clicking "Import and enrich".
-  const [importEntityType, setImportEntityType] = useState<'venue' | 'festival'>(defaultEntityType)
-  // Keep the selector in sync when the active tab changes (only if no import
-  // is currently staged — don't clobber a deliberate override mid-flight).
+  // 'auto' = classify each row individually by name+category.
+  // 'venue' / 'festival' = force the whole batch to that type.
+  const [importEntityType, setImportEntityType] = useState<'auto' | 'venue' | 'festival'>('auto')
+  // Keep the selector in sync when the active tab changes only if it's still
+  // on auto — a deliberate manual override stays pinned until user resets it.
   useEffect(() => {
+    if (importEntityType === 'auto') return // auto never needs syncing
     setImportEntityType(prev => (prev === defaultEntityType ? prev : defaultEntityType))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultEntityType])
@@ -100,6 +104,19 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
     }
   }
 
+  // ── Region Scan state ────────────────────────────────────────────────────
+  const [scanLocation, setScanLocation] = useState('Malia, Crete')
+  const [scanning, setScanning] = useState(false)
+  const [scanProgress, setScanProgress] = useState<{ done: number; total: number; currentQuery: string } | null>(null)
+  const [scanResults, setScanResults] = useState<RegionScanResult[]>([])
+  const [scanDone, setScanDone] = useState(false)
+  const [scanFilter, setScanFilter] = useState<'all' | 'own'>('own')
+  const [selectedScanUrls, setSelectedScanUrls] = useState<Set<string>>(new Set())
+  const [addingFromScan, setAddingFromScan] = useState(false)
+  const [addScanProgress, setAddScanProgress] = useState('')
+  const scanAbortRef = useRef<AbortController | null>(null)
+  // ── end Region Scan state ────────────────────────────────────────────────
+
   const [draftCity, setDraftCity] = useState<City>('Berlin')
   const [draftCategory, setDraftCategory] = useState<Category>('Beach Club')
 
@@ -109,11 +126,14 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
     if (existingNames.has(name.toLowerCase())) {
       if (!confirm(`A venue named "${name}" already exists. Add anyway?`)) return
     }
+    // Resolve entity type: forced override wins, otherwise auto-classify.
+    const scrapedEntityType =
+      importEntityType !== 'auto' ? importEntityType : classifyEntityType(name, draftCategory)
     await onAdd({
       name,
       category: draftCategory,
       city: draftCity,
-      entity_type: importEntityType,
+      entity_type: scrapedEntityType,
       website: scrapePreview.website,
       email: scrapePreview.email,
       instagram: scrapePreview.instagram,
@@ -145,16 +165,119 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
   const [importProgress, setImportProgress] = useState('')
   const [importSummary, setImportSummary] = useState<string | null>(null)
 
+  // ── Region Scan handlers ──────────────────────────────────────────────────
+  const startRegionScan = async () => {
+    if (!scanLocation.trim() || !scraperEnabled) return
+    // Cancel any in-flight scan
+    scanAbortRef.current?.abort()
+    const controller = new AbortController()
+    scanAbortRef.current = controller
+
+    setScanning(true)
+    setScanDone(false)
+    setScanResults([])
+    setSelectedScanUrls(new Set())
+    setScanProgress({ done: 0, total: 1, currentQuery: 'Generating queries…' })
+
+    try {
+      const results = await scanRegion(
+        scanLocation.trim(),
+        aiSettings,
+        progress => setScanProgress(progress),
+        controller.signal,
+      )
+      setScanResults(results)
+      setScanDone(true)
+    } catch {
+      // aborted or fatal error — results may be partial
+      setScanDone(true)
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  const stopScan = () => {
+    scanAbortRef.current?.abort()
+    setScanning(false)
+    setScanDone(true)
+  }
+
+  const toggleScanUrl = (url: string) => {
+    setSelectedScanUrls(prev => {
+      const next = new Set(prev)
+      if (next.has(url)) next.delete(url)
+      else next.add(url)
+      return next
+    })
+  }
+
+  const selectAllVisible = (results: RegionScanResult[]) => {
+    setSelectedScanUrls(new Set(results.map(r => r.url)))
+  }
+
+  const clearSelection = () => setSelectedScanUrls(new Set())
+
+  /**
+   * Scrape each selected URL and add the result as a venue/festival.
+   * City is inferred from the scan location (first comma-separated token).
+   */
+  const addSelectedFromScan = async (visible: RegionScanResult[]) => {
+    const toAdd = visible.filter(r => selectedScanUrls.has(r.url))
+    if (toAdd.length === 0) return
+
+    const inferredCity = (scanLocation.split(',')[0]?.trim() || scanLocation) as City
+    setAddingFromScan(true)
+
+    for (const [i, result] of toAdd.entries()) {
+      setAddScanProgress(`Scraping ${i + 1}/${toAdd.length}: ${result.title || result.url}`)
+      try {
+        const scraped = await scrapeUrl(result.url, aiSettings)
+        const name = scraped.title?.split(/[|·–-]/)[0].trim() || result.title || result.url
+        const category: Category = 'Other'
+        await onAdd({
+          name,
+          category,
+          city: inferredCity,
+          entity_type: classifyEntityType(name, category),
+          website: result.url,
+          email: scraped.emails[0],
+          instagram: scraped.instagram_handles[0],
+          phone: scraped.phones[0],
+          notes: scraped.description,
+          has_djs: false,
+          has_events: false,
+          has_audio: false,
+          outdoor: false,
+          luxury_score: 2,
+          tourist_area: true,
+          status: 'researching',
+          tags: [],
+          source: `region-scan:${scanLocation}`,
+        })
+      } catch {
+        // skip failed scrapes — don't block the rest
+      }
+    }
+
+    setAddScanProgress(`Done — added ${toAdd.length} venues.`)
+    setAddingFromScan(false)
+    clearSelection()
+  }
+  // ── end Region Scan handlers ──────────────────────────────────────────────
+
   const quickAdd = async () => {
     if (!quickName.trim()) return
     if (existingNames.has(quickName.trim().toLowerCase())) {
       if (!confirm(`A venue named "${quickName}" already exists. Add anyway?`)) return
     }
+    // Always auto-classify for Quick Add — the user can correct by editing
+    // the record afterward if needed.
+    const detectedType = classifyEntityType(quickName.trim(), quickCategory)
     await onAdd({
       name: quickName.trim(),
       category: quickCategory,
       city: quickCity,
-      entity_type: importEntityType,
+      entity_type: detectedType,
       instagram: quickInstagram.replace(/^@/, '') || undefined,
       website: quickWebsite.trim() || undefined,
       has_djs: false,
@@ -208,16 +331,20 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
         setImportProgress(`Processing ${index + 1}/${importedRows.length}: ${row.name}`)
         const enrichedRow = await enrichImportedRow(row)
         const patch = toVenueDraft(enrichedRow)
+        // Resolve the effective entity type for this row:
+        // - 'auto'   → use the per-row classifier result already in patch
+        // - 'venue'/'festival' → user forced the whole batch; override
+        const effectiveEntityType =
+          importEntityType === 'auto' ? patch.entity_type : importEntityType
+
         const existing = findExistingVenueByName(venues, row.name)
         if (existing) {
           await onUpdate(existing.id, {
             city: patch.city,
             category: patch.category,
-            // entity_type is intentionally overwritten by the import — that
-            // way an existing "Festival X" row mistakenly classified as a
-            // venue gets reclassified when the user re-imports it as a
-            // festival. Matches the same overwrite logic as city/category.
-            entity_type: importEntityType,
+            // Overwrite entity_type so a mis-classified existing row gets
+            // corrected when re-imported (matches city/category overwrite logic).
+            entity_type: effectiveEntityType,
             website: existing.website ?? patch.website,
             instagram: existing.instagram ?? patch.instagram,
             email: existing.email ?? patch.email,
@@ -231,10 +358,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
           })
           updated += 1
         } else {
-          // Explicit entity_type wins over addScoped's default (which is the
-          // active tab). Without this, importing a festival sheet from the
-          // Venues tab would silently land 302 rows in the wrong slice.
-          await onAdd({ ...patch, entity_type: importEntityType })
+          await onAdd({ ...patch, entity_type: effectiveEntityType })
           created += 1
         }
 
@@ -329,15 +453,16 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
             <span className="field-label">Import as</span>
             <select
               value={importEntityType}
-              onChange={event => setImportEntityType(event.target.value as 'venue' | 'festival')}
+              onChange={event => setImportEntityType(event.target.value as 'auto' | 'venue' | 'festival')}
             >
-              <option value="venue">Venues</option>
-              <option value="festival">Festivals</option>
+              <option value="auto">Auto-detect per row</option>
+              <option value="venue">Force all → Venues</option>
+              <option value="festival">Force all → Festivals</option>
             </select>
             <span className="muted small">
-              All rows in this import land in the <strong>{importEntityType === 'festival' ? 'Festivals' : 'Venues'}</strong> tab.
-              Quick Add and Save-scrape below also use this choice.
-              {importEntityType !== defaultEntityType ? ' Override differs from the active tab — that\'s on purpose.' : ''}
+              {importEntityType === 'auto'
+                ? 'Each row is classified individually — "Festival" category or festival keywords in the name go to Festivals, everything else to Venues.'
+                : `All rows forced into the ${importEntityType === 'festival' ? 'Festivals' : 'Venues'} tab regardless of name or category.`}
             </span>
           </label>
           <label className="field">
@@ -362,6 +487,163 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
           <button className="primary-btn" onClick={() => void runSpreadsheetImport()} disabled={importing || importedRows.length === 0}>
             {importing ? 'Importing…' : 'Import and enrich'}
           </button>
+        </div>
+
+        {/* ── Region Scan ─────────────────────────────────────────────── */}
+        <div className="card discovery-card region-scan-card">
+          <h3>Region scan</h3>
+          <p className="muted small">
+            Type a location and the scanner runs {'>'}15 targeted queries automatically —
+            nightclubs, beach clubs, bars, rooftops, live music — and surfaces every unique
+            venue it finds in one list.
+          </p>
+
+          <div className="search-row">
+            <input
+              value={scanLocation}
+              onChange={e => setScanLocation(e.target.value)}
+              placeholder="e.g. Malia, Crete"
+              onKeyDown={e => { if (e.key === 'Enter' && !scanning) void startRegionScan() }}
+            />
+            {scanning ? (
+              <button className="link-btn" onClick={stopScan}>Stop</button>
+            ) : (
+              <button
+                className="primary-btn"
+                onClick={() => void startRegionScan()}
+                disabled={!scanLocation.trim() || !scraperEnabled}
+              >
+                Scan region
+              </button>
+            )}
+          </div>
+
+          {/* Progress bar */}
+          {scanProgress && scanning ? (
+            <div className="scan-progress">
+              <div className="scan-progress-bar">
+                <div
+                  className="scan-progress-fill"
+                  style={{ width: `${scanProgress.total > 0 ? Math.round((scanProgress.done / scanProgress.total) * 100) : 0}%` }}
+                />
+              </div>
+              <div className="muted small scan-progress-label">
+                {scanProgress.done}/{scanProgress.total} — {scanProgress.currentQuery}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Results */}
+          {scanResults.length > 0 ? (
+            <div className="scan-results-wrapper">
+              <div className="scan-results-toolbar">
+                <div className="scan-summary">
+                  {scanResults.length} unique results
+                  {scanDone && !scanning ? ' · scan complete' : ' · scanning…'}
+                </div>
+                <div className="scan-filter-row">
+                  <button
+                    className={`chip ${scanFilter === 'own' ? 'active' : ''}`}
+                    onClick={() => setScanFilter('own')}
+                  >
+                    Own sites only
+                  </button>
+                  <button
+                    className={`chip ${scanFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => setScanFilter('all')}
+                  >
+                    All results
+                  </button>
+                </div>
+              </div>
+
+              {(() => {
+                const visible = scanFilter === 'own'
+                  ? scanResults.filter(r => r.likelyOwnSite)
+                  : scanResults
+
+                return (
+                  <>
+                    <div className="scan-select-row">
+                      <button className="link-btn" onClick={() => selectAllVisible(visible)}>
+                        Select all ({visible.length})
+                      </button>
+                      <button className="link-btn" onClick={clearSelection}>Clear</button>
+                      {selectedScanUrls.size > 0 ? (
+                        <span className="muted small">{selectedScanUrls.size} selected</span>
+                      ) : null}
+                    </div>
+
+                    <ul className="scan-result-list">
+                      {visible.map(r => (
+                        <li key={r.url} className={`scan-result-item ${selectedScanUrls.has(r.url) ? 'selected' : ''}`}>
+                          <label className="scan-result-check">
+                            <input
+                              type="checkbox"
+                              checked={selectedScanUrls.has(r.url)}
+                              onChange={() => toggleScanUrl(r.url)}
+                            />
+                          </label>
+                          <div className="scan-result-body">
+                            <div className="scan-result-title">{r.title}</div>
+                            <a
+                              className="scan-result-url cell-link"
+                              href={r.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {r.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                            </a>
+                            <div className="scan-result-desc muted small">{r.description}</div>
+                          </div>
+                          <div className="scan-result-actions">
+                            {r.likelyOwnSite
+                              ? <span className="scan-badge own">own site</span>
+                              : <span className="scan-badge dir">directory</span>}
+                            <button
+                              className="link-btn"
+                              onClick={() => {
+                                setScrapeUrlInput(r.url)
+                                void runScrape()
+                              }}
+                            >
+                              Scrape →
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                      {visible.length === 0 ? (
+                        <li className="muted small">No results match this filter.</li>
+                      ) : null}
+                    </ul>
+
+                    {selectedScanUrls.size > 0 ? (
+                      <div className="scan-add-bar">
+                        {addScanProgress ? <span className="muted small">{addScanProgress}</span> : null}
+                        <button
+                          className="primary-btn"
+                          onClick={() => void addSelectedFromScan(visible)}
+                          disabled={addingFromScan}
+                        >
+                          {addingFromScan
+                            ? 'Adding…'
+                            : `Scrape & add ${selectedScanUrls.size} venue${selectedScanUrls.size !== 1 ? 's' : ''}`}
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                )
+              })()}
+            </div>
+          ) : null}
+
+          {scanDone && scanResults.length === 0 ? (
+            <div className="muted small">No results found. Try a different location or check scraper connectivity.</div>
+          ) : null}
+          {!scraperEnabled ? (
+            <div className="muted small">Region scan requires the scraper backend. Run locally or set VITE_SCRAPER_URL.</div>
+          ) : null}
         </div>
 
         {/* Search */}
@@ -466,9 +748,12 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
               <div className="field-row">
                 <label className="field">
                   <span className="field-label">City</span>
-                  <select value={draftCity} onChange={e => setDraftCity(e.target.value as City)}>
-                    {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  <input
+                    list="cities-datalist"
+                    value={draftCity}
+                    onChange={e => setDraftCity(e.target.value as City)}
+                    placeholder="City or type custom…"
+                  />
                 </label>
                 <label className="field">
                   <span className="field-label">Category</span>
@@ -487,7 +772,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
         {/* Manual quick add */}
         <div className="card discovery-card">
           <h3>Quick add</h3>
-          <p className="muted small">For venues already cleared by your scout team.</p>
+          <p className="muted small">For venues already cleared by your scout team. Type detected automatically from the name and category.</p>
           <label className="field">
             <span className="field-label">Name</span>
             <input value={quickName} onChange={e => setQuickName(e.target.value)} placeholder="e.g. Kater Blau" />
@@ -495,9 +780,12 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
           <div className="field-row">
             <label className="field">
               <span className="field-label">City</span>
-              <select value={quickCity} onChange={e => setQuickCity(e.target.value as City)}>
-                {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <input
+                list="cities-datalist"
+                value={quickCity}
+                onChange={e => setQuickCity(e.target.value as City)}
+                placeholder="City or type custom…"
+              />
             </label>
             <label className="field">
               <span className="field-label">Category</span>
@@ -514,11 +802,22 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
             <span className="field-label">Website</span>
             <input value={quickWebsite} onChange={e => setQuickWebsite(e.target.value)} placeholder="https://…" />
           </label>
-          <button className="primary-btn" onClick={quickAdd} disabled={!quickName.trim()}>
-            Add venue
-          </button>
+          <div className="quick-add-footer">
+            {quickName.trim() ? (
+              <span className={`classify-badge classify-${classifyEntityType(quickName.trim(), quickCategory)}`}>
+                → {classifyEntityType(quickName.trim(), quickCategory) === 'festival' ? 'Festivals' : 'Venues'} tab
+              </span>
+            ) : null}
+            <button className="primary-btn" onClick={quickAdd} disabled={!quickName.trim()}>
+              Add
+            </button>
+          </div>
         </div>
       </div>
+      {/* Shared datalist — referenced by both city inputs above */}
+      <datalist id="cities-datalist">
+        {CITIES.map(c => <option key={c} value={c} />)}
+      </datalist>
     </section>
   )
 }

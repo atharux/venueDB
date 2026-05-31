@@ -1,6 +1,38 @@
 import type { Category, City, Venue, VenueDraft } from './types'
 import { CATEGORIES } from './types'
 
+// ---------------------------------------------------------------------------
+// Smart entity-type classifier
+// Determines whether a lead should land in Venues or Festivals without
+// requiring the user to manually pick for every row.
+//
+// Priority order:
+//   1. Category match → 'Festival' category always → festival
+//   2. Name keywords  → strong festival signals in the name
+//   3. Fallback       → venue (the safer default)
+// ---------------------------------------------------------------------------
+const FESTIVAL_NAME_PATTERNS = [
+  /\bfestival\b/i,
+  /\bfest\b/i,         // "SunFest", "Techno Fest"
+  /\bcarnival\b/i,
+  /\bcarnaval\b/i,
+  /\bopen.air\b/i,     // "Open Air", "open-air"
+  /\boutdoor.event\b/i,
+  /\bsummer.camp\b/i,
+]
+
+/**
+ * Classify a lead as 'venue' or 'festival' based on its name and category.
+ * Used during import and Quick Add so records land in the right tab
+ * without the user having to set the entity type manually.
+ */
+export function classifyEntityType(name: string, category: Category): 'venue' | 'festival' {
+  if (category === 'Festival') return 'festival'
+  const hay = name.trim()
+  if (FESTIVAL_NAME_PATTERNS.some(re => re.test(hay))) return 'festival'
+  return 'venue'
+}
+
 export interface ImportedLeadRow {
   name: string
   city: City
@@ -71,6 +103,9 @@ export function toVenueDraft(row: ImportedLeadRow): VenueDraft {
     name: row.name,
     city: row.city,
     category: row.category,
+    // Auto-classify so each row lands in the right tab by default.
+    // The caller (runSpreadsheetImport) can override this with a manual choice.
+    entity_type: classifyEntityType(row.name, row.category),
     website: row.website,
     instagram: row.instagram,
     facebook: row.facebook,
