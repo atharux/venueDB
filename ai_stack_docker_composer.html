@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Stack Composer (Flowise + Qdrant + Ollama + Supabase)</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+      background: #0b0f14;
+      color: #e6edf3;
+      line-height: 1.5;
+    }
+
+    header {
+      padding: 24px;
+      border-bottom: 1px solid #1f2937;
+      background: #0f1620;
+      position: sticky;
+      top: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .subtitle {
+      opacity: 0.7;
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      padding: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #111826;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .card h2 {
+      font-size: 14px;
+      margin: 0 0 10px;
+      color: #93c5fd;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    pre {
+      margin: 0;
+      padding: 12px;
+      background: #0b0f14;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 12px;
+      border: 1px solid #1f2937;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    @media (min-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .highlight {
+      color: #60a5fa;
+    }
+
+    footer {
+      padding: 24px;
+      text-align: center;
+      opacity: 0.5;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>AI Stack Composer</h1>
+  <div class="subtitle">Flowise · Qdrant · Ollama · Supabase (optional) — local-first architecture</div>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <h2>Architecture Overview</h2>
+    <pre>
+React App (Your Venue Intel System)
+        ↓
+Supabase / LocalStorage (Source of Truth)
+        ↓
+Qdrant (Vector Memory / Semantic Search)
+        ↓
+Flowise (AI Orchestration Layer)
+        ↓
+Ollama (Local LLM Runtime)
+    </pre>
+  </div>
+
+  <div class="grid">
+
+    <div class="card">
+      <h2>Docker Compose</h2>
+      <pre>
+version: "3.9"
+
+services:
+
+  flowise:
+    image: flowiseai/flowise:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - FLOWISE_USERNAME=admin
+      - FLOWISE_PASSWORD=admin
+    volumes:
+      - flowise_data:/root/.flowise
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+    ports:
+      - "5432:5432"
+
+volumes:
+  flowise_data:
+  qdrant_data:
+  ollama_data:
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>Service URLs</h2>
+      <pre>
+Flowise → http://localhost:3000
+Qdrant  → http://localhost:6333
+Ollama  → http://localhost:11434
+Postgres → http://localhost:5432
+      </pre>
+    </div>
+
+  </div>
+
+  <div class="card">
+    <h2>Data Flow (Your App)</h2>
+    <pre>
+1. User adds venue in React App
+2. Venue saved in Supabase / localStorage
+3. Venue text → embedding generated
+4. Embedding stored in Qdrant
+5. Flowise queries Qdrant for similarity
+6. Ollama generates reasoning + ranking
+7. React displays enriched discovery results
+    </pre>
+  </div>
+
+  <div class="card">
+    <h2>Key Design Rule</h2>
+    <pre>
+Supabase = structured truth (CRUD, auth, sync)
+Qdrant   = semantic intelligence (meaning, similarity)
+Flowise  = orchestration (AI workflows)
+Ollama   = reasoning engine (local LLM)
+    </pre>
+  </div>
+
+</div>
+
+<footer>
+  AI Stack Composer — local-first AI architecture for venue intelligence systems
+</footer>
+
+</body>
+</html>

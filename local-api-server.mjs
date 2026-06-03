@@ -99,23 +99,71 @@ function headerValue(value) {
   return Array.isArray(value) ? value[0] : value
 }
 
-async function enrichLead(input, ai = {}) {
-  const searchResults = input.website ? [] : await searchDuckDuckGo(`${input.name} ${input.city ?? ''} official website contact`).catch(() => [])
-  const website = input.website ?? pickBestWebsite(searchResults)
-  if (!website) return { website: input.website, instagram: input.instagram, email: input.email, phone: input.phone, notes: input.notes }
+// Contact-page paths to walk in order. Mirrors scraper-core.ts so the local
+// server does the same multi-page graph traversal as the deployed worker.
+const CONTACT_PATHS = ['', '/contact', '/contact-us', '/about', '/impressum', '/kontakt']
 
-  const scraped = await scrapeTarget(website)
+/** Build a same-origin URL for a contact path. Returns null on parse failure. */
+function buildSameOriginUrl(base, path) {
+  try {
+    const url = new URL(base)
+    if (!path) return url.toString()
+    url.pathname = path
+    url.search = ''
+    url.hash = ''
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
+async function enrichLead(input, ai = {}) {
+  const attempts = []
+
+  const searchResults = input.website ? [] : await searchDuckDuckGo(`${input.name} ${input.city ?? ''} official website contact`).catch(() => [])
+  const baseUrl = input.website ?? pickBestWebsite(searchResults)
+  if (!baseUrl) return { website: input.website, instagram: input.instagram, email: input.email, phone: input.phone, notes: input.notes, attempts }
+
+  // Walk CONTACT_PATHS on the same origin, merging findings as we go.
+  // Stop early once we have both an email and a phone — no need to continue.
+  const merged = { emails: [], instagram_handles: [], phones: [], addresses: [], title: undefined, description: undefined, raw_text_excerpt: undefined }
+
+  for (const contactPath of CONTACT_PATHS) {
+    const target = buildSameOriginUrl(baseUrl, contactPath)
+    if (!target) continue
+
+    try {
+      const scraped = await scrapeTarget(target)
+      attempts.push({ url: target, ok: true, emails: scraped.emails.length, instagrams: scraped.instagram_handles.length, phones: scraped.phones.length })
+
+      merged.emails = uniq([...merged.emails, ...scraped.emails])
+      merged.instagram_handles = uniq([...merged.instagram_handles, ...scraped.instagram_handles])
+      merged.phones = uniq([...merged.phones, ...scraped.phones])
+      merged.addresses = uniq([...merged.addresses, ...scraped.addresses])
+      if (!merged.title) merged.title = scraped.title
+      if (!merged.description) merged.description = scraped.description
+      if (!merged.raw_text_excerpt) merged.raw_text_excerpt = scraped.raw_text_excerpt
+
+      // Early exit — homepage contact page usually has enough.
+      if (merged.emails.length > 0 && merged.phones.length > 0) break
+    } catch (err) {
+      attempts.push({ url: target, ok: false, emails: 0, instagrams: 0, phones: 0, error: err instanceof Error ? err.message : String(err) })
+      // 404 on /contact is normal — keep walking.
+    }
+  }
+
   const deterministic = {
-    website,
-    instagram: input.instagram ?? scraped.instagram_handles[0],
-    email: input.email ?? scraped.emails[0],
-    phone: input.phone ?? scraped.phones[0],
-    notes: input.notes ?? scraped.description,
-    scraped,
+    website: baseUrl,
+    instagram: input.instagram ?? merged.instagram_handles[0],
+    email: input.email ?? merged.emails[0],
+    phone: input.phone ?? merged.phones[0],
+    notes: input.notes ?? merged.description,
+    scraped: { ...merged, url: baseUrl, fetched_at: new Date().toISOString() },
+    attempts,
   }
 
   if (!ai.apiKey) return deterministic
-  const aiSelection = await selectWithOpenRouter(input, scraped, searchResults, ai).catch(() => null)
+  const aiSelection = await selectWithOpenRouter(input, { ...merged, url: baseUrl }, searchResults, ai).catch(() => null)
   if (!aiSelection) return deterministic
   return {
     website: deterministic.website,
@@ -123,8 +171,9 @@ async function enrichLead(input, ai = {}) {
     email: deterministic.email ?? aiSelection.email,
     phone: deterministic.phone ?? aiSelection.phone,
     notes: deterministic.notes ?? aiSelection.notes,
-    scraped,
+    scraped: deterministic.scraped,
     model: aiSelection.model,
+    attempts,
   }
 }
 

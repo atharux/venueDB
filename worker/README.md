@@ -1,16 +1,20 @@
-# Crete Scraper Worker
+# Venue Scraper Worker
 
-A Cloudflare Worker that powers the "Scrape this venue" magic moment in the Crete Nightlife Intelligence MVP.
+Shared Cloudflare Worker used by **venue-outreach-db** and **athar-eventplanner**.
 
-## What it does
+## Endpoints
 
-- `POST /scrape  { url }`  — fetches a venue page, extracts public emails, Instagram handles, phones, addresses, title, description. Returns JSON.
-- `POST /search  { query }` — proxies Brave Search (optional, requires `BRAVE_API_KEY`).
-- `GET  /health` — sanity check + tells you whether search is enabled.
+| Method | Path | Body | Description |
+|--------|------|------|-------------|
+| `POST` | `/scrape` | `{ url }` | Fetch a venue page, extract emails, Instagram handles, phones, addresses, title, description |
+| `POST` | `/discover` | `{ city, category, country?, limit? }` | Find venues/businesses via Overpass API (OpenStreetMap) — free, no key |
+| `POST` | `/enrich` | `{ url, context? }` | Scrape a URL + LLM extraction of structured contact info (needs `OPENROUTER_API_KEY`) |
+| `POST` | `/search` | `{ query }` | Brave Search proxy — needs `BRAVE_API_KEY` |
+| `GET` | `/health` | — | Status + capabilities check |
 
-No external npm dependencies in production code. Pure regex + native `fetch`. Runs on the Cloudflare Workers free tier.
+No external npm dependencies. Regex + native `fetch` + Overpass API. Runs on the Cloudflare Workers free tier.
 
-## Deploy in 4 commands
+## Deploy
 
 ```bash
 cd worker
@@ -19,26 +23,47 @@ npx wrangler login        # one-time, opens browser
 npx wrangler deploy
 ```
 
-The deploy prints a URL like `https://crete-scraper.<your-account>.workers.dev`. Copy it.
+The deploy prints a URL like `https://venue-scraper.<your-account>.workers.dev`. Use this in both apps:
 
-Now in the frontend `.env`:
+- venue-outreach-db: `VITE_SCRAPER_URL=https://venue-scraper.<your-account>.workers.dev`
+- athar-eventplanner: `VITE_SCRAPER_URL=https://venue-scraper.<your-account>.workers.dev`
 
-```
-VITE_SCRAPER_URL=https://crete-scraper.<your-account>.workers.dev
-```
-
-Reload the app. The "Scrape" buttons go live.
-
-## Enable in-app search (optional)
-
-Get a free Brave Search API key at https://api.search.brave.com/. Then:
+## Secrets (all optional)
 
 ```bash
+# Enables /enrich LLM extraction (free models via OpenRouter)
+npx wrangler secret put OPENROUTER_API_KEY
+
+# Enables /search (Brave Search API — 2k free queries/month)
 npx wrangler secret put BRAVE_API_KEY
-# paste your key when prompted
 ```
 
-No redeploy needed.
+No redeploy needed after setting secrets.
+
+Without secrets, `/scrape` and `/discover` still work fully (regex + Overpass = entirely free).
+
+## Discovery categories
+
+`/discover` maps `category` to OpenStreetMap tags:
+
+| Category string | OSM tags queried |
+|----------------|-----------------|
+| `nightclub` | `amenity=nightclub` |
+| `bar`, `bar with djs`, `rooftop bar` | `amenity=bar` |
+| `beach club` | `leisure=beach_resort`, `amenity=nightclub`, `tourism=resort` |
+| `hotel`, `boutique hotel` | `tourism=hotel` |
+| `resort` | `tourism=resort` |
+| `restaurant`, `beach restaurant` | `amenity=restaurant` |
+| `live music venue`, `music venue` | `amenity=music_venue`, `amenity=arts_centre` |
+| `wedding venue`, `festival`, `event space` | `amenity=events_venue` |
+| `coworking` | `amenity=coworking_space`, `amenity=conference_centre` |
+| `cafe` | `amenity=cafe` |
+
+Example request:
+```json
+POST /discover
+{ "city": "Berlin", "category": "nightclub", "country": "DE", "limit": 20 }
+```
 
 ## Local dev
 
@@ -47,25 +72,17 @@ npx wrangler dev
 # Worker runs on http://localhost:8787
 ```
 
-Point the frontend at it temporarily:
+## CORS
 
-```
-VITE_SCRAPER_URL=http://localhost:8787
-```
-
-## Tighten CORS for production
-
-`wrangler.toml` ships with `ALLOWED_ORIGINS = "*"` for quick setup. Lock this down once your frontend has a real domain:
+`wrangler.toml` ships with `ALLOWED_ORIGINS = "*"` for quick setup. Lock this down once your frontends have real domains:
 
 ```toml
 [vars]
-ALLOWED_ORIGINS = "https://your-app.pages.dev,https://crete.yourdomain.com"
+ALLOWED_ORIGINS = "https://venue-outreach-db.pages.dev,https://athar-eventplanner.pages.dev"
 ```
 
-Then `npx wrangler deploy`.
+## Known limits
 
-## Honest limits
-
-- Instagram blocks unauth scrapers — handles found in `<a href>` tags work, deeper IG scraping does not.
-- Google Maps does not return useful HTML to bots — use Brave Search or a paid Maps API.
-- JavaScript-rendered pages (React/Vue venue sites) return mostly empty HTML. ~10–20% of venues. Use the "Open in Google" launcher + manual paste for those.
+- Instagram blocks unauth scrapers from Workers IPs — handles in `<a href>` tags work, deep IG scraping does not.
+- JavaScript-rendered sites (React/Vue) return mostly empty HTML — about 10–20% of venues. Manual fallback needed.
+- Overpass has rate limits for bursts; the 25s timeout is generous for normal use.

@@ -1,19 +1,22 @@
 /**
- * Crete Nightlife Intelligence — Scraper Worker
+ * Venue Scraper Worker — shared by venue-outreach-db and athar-eventplanner
  *
  * Endpoints:
- *   POST /scrape  { url }  → ScrapeResult
- *   POST /search  { query } → { results: SearchResult[] }   (requires BRAVE_API_KEY)
- *   GET  /health           → { ok: true }
+ *   POST /scrape    { url }                           → ScrapeResult
+ *   POST /search    { query }                         → { results: SearchResult[] }  (BRAVE_API_KEY)
+ *   POST /discover  { city, category, country?, limit? } → { results: DiscoveredVenue[] }  (Overpass/free)
+ *   POST /enrich    { url, context? }                 → EnrichedVenue  (scrape + LLM)
+ *   GET  /health                                      → { ok: true }
  *
- * Designed for the Cloudflare Workers free tier. No external npm deps —
- * uses regex-based extraction (cheerio would balloon the bundle and the
- * regex approach already handles 80–90% of venue sites cleanly).
+ * Designed for the Cloudflare Workers free tier. No external npm deps.
+ * Discovery uses Overpass API (OpenStreetMap) — completely free, no account needed.
+ * Enrichment uses OpenRouter free models for LLM extraction.
  */
 
 export interface Env {
   ALLOWED_ORIGINS: string
   BRAVE_API_KEY?: string
+  OPENROUTER_API_KEY?: string
 }
 
 interface ScrapeResult {
@@ -34,6 +37,35 @@ interface SearchResult {
   description: string
 }
 
+interface DiscoveredVenue {
+  osm_id: number
+  osm_type: 'node' | 'way' | 'relation'
+  name: string
+  lat: number
+  lng: number
+  category: string
+  address: Partial<{ road: string; city: string; country: string; postcode: string }>
+  website?: string
+  phone?: string
+  email?: string
+  opening_hours?: string
+  tags: Record<string, string>
+}
+
+interface EnrichedVenue {
+  url: string
+  scraped: ScrapeResult
+  extracted: {
+    name?: string
+    email?: string
+    phone?: string
+    instagram?: string
+    address?: string
+    description?: string
+    booking_contact?: string
+  }
+}
+
 const MAX_BYTES = 1_500_000 // 1.5 MB cap per fetch
 const USER_AGENT = 'CreteNightlifeBot/0.1 (+https://example.com/crete-bot)'
 
@@ -49,7 +81,11 @@ export default {
     const url = new URL(req.url)
     try {
       if (url.pathname === '/health') {
-        return json({ ok: true, hasSearch: Boolean(env.BRAVE_API_KEY) }, 200, corsHeaders)
+        return json({
+          ok: true,
+          hasSearch: Boolean(env.BRAVE_API_KEY),
+          hasEnrich: Boolean(env.OPENROUTER_API_KEY),
+        }, 200, corsHeaders)
       }
       if (url.pathname === '/scrape' && req.method === 'POST') {
         const { url: target } = await req.json<{ url?: string }>()
@@ -69,6 +105,18 @@ export default {
         if (!query) return json({ error: 'Missing query' }, 400, corsHeaders)
         const results = await braveSearch(query, env.BRAVE_API_KEY)
         return json({ results }, 200, corsHeaders)
+      }
+      if (url.pathname === '/discover' && req.method === 'POST') {
+        const body = await req.json<{ city?: string; category?: string; country?: string; limit?: number }>()
+        if (!body.city || !body.category) return json({ error: 'city and category required' }, 400, corsHeaders)
+        const results = await discoverVenues(body.city, body.category, body.country ?? '', body.limit ?? 30)
+        return json({ results }, 200, corsHeaders)
+      }
+      if (url.pathname === '/enrich' && req.method === 'POST') {
+        const body = await req.json<{ url?: string; context?: string }>()
+        if (!body.url) return json({ error: 'url required' }, 400, corsHeaders)
+        const result = await enrichVenue(body.url, body.context ?? '', env.OPENROUTER_API_KEY)
+        return json(result, 200, corsHeaders)
       }
       return json({ error: 'Not found' }, 404, corsHeaders)
     } catch (err) {
@@ -128,7 +176,7 @@ async function scrape(target: string): Promise<ScrapeResult> {
     buf.set(c, offset)
     offset += c.length
   }
-  const html = new TextDecoder('utf-8', { fatal: false }).decode(buf)
+  const html = new TextDecoder('utf-8', { fatal: false, ignoreBOM: false }).decode(buf)
 
   // Decode HTML entities once for the text fields we extract.
   const decoded = decodeEntities(html)
@@ -225,6 +273,201 @@ function decodeEntities(s: string): string {
 
 function uniq<T>(arr: T[]): T[] {
   return Array.from(new Set(arr))
+}
+
+// ---------- Overpass Discovery ----------
+
+const OSM_TAGS: Record<string, string[][]> = {
+  // Each entry is a list of [key, value] pairs (OR'd together in the query)
+  'nightclub':          [['amenity', 'nightclub']],
+  'beach club':         [['leisure', 'beach_resort'], ['amenity', 'nightclub'], ['tourism', 'resort']],
+  'bar':                [['amenity', 'bar']],
+  'bar with djs':       [['amenity', 'bar']],
+  'rooftop bar':        [['amenity', 'bar']],
+  'resort':             [['tourism', 'resort']],
+  'hotel':              [['tourism', 'hotel']],
+  'boutique hotel':     [['tourism', 'hotel']],
+  'event villa':        [['tourism', 'guest_house'], ['amenity', 'events_venue']],
+  'wedding venue':      [['amenity', 'events_venue']],
+  'festival':           [['amenity', 'events_venue']],
+  'restaurant':         [['amenity', 'restaurant']],
+  'beach restaurant':   [['amenity', 'restaurant']],
+  'live music venue':   [['amenity', 'music_venue'], ['amenity', 'arts_centre']],
+  'music venue':        [['amenity', 'music_venue']],
+  'coworking':          [['amenity', 'coworking_space'], ['amenity', 'conference_centre']],
+  'event space':        [['amenity', 'events_venue'], ['amenity', 'conference_centre']],
+  'cafe':               [['amenity', 'cafe']],
+  'club':               [['amenity', 'nightclub'], ['amenity', 'social_club']],
+}
+
+function resolveOsmTags(category: string): string[][] {
+  const key = category.toLowerCase().trim()
+  return OSM_TAGS[key] ?? OSM_TAGS[key.split(' ')[0]] ?? [['amenity', 'nightclub']]
+}
+
+function buildOverpassQuery(city: string, country: string, tagPairs: string[][]): string {
+  // Build a union of node/way/relation queries for each tag pair
+  const filters = tagPairs
+    .map(([k, v]) =>
+      [`node["${k}"="${v}"](area.searchArea);`,
+       `way["${k}"="${v}"](area.searchArea);`].join('\n  ')
+    )
+    .join('\n  ')
+
+  const areaFilter = country
+    ? `area[name="${city}"]["ISO3166-2"~"${country.toUpperCase()}"]->.searchArea;`
+    : `area[name="${city}"][admin_level~"^(4|6|7|8)$"]->.searchArea;`
+
+  return `[out:json][timeout:25];\n${areaFilter}\n(\n  ${filters}\n);\nout center tags;`
+}
+
+async function discoverVenues(
+  city: string,
+  category: string,
+  country: string,
+  limit: number,
+): Promise<DiscoveredVenue[]> {
+  const tagPairs = resolveOsmTags(category)
+  const query = buildOverpassQuery(city, country, tagPairs)
+
+  const res = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `data=${encodeURIComponent(query)}`,
+  })
+
+  if (!res.ok) {
+    throw new Error(`Overpass API error: ${res.status} ${await res.text().then(t => t.slice(0, 200))}`)
+  }
+
+  const data = (await res.json()) as {
+    elements?: {
+      type: string
+      id: number
+      lat?: number
+      lon?: number
+      center?: { lat: number; lon: number }
+      tags?: Record<string, string>
+    }[]
+  }
+
+  const elements = data.elements ?? []
+  return elements
+    .slice(0, limit)
+    .filter(el => el.tags?.name)
+    .map(el => {
+      const tags = el.tags ?? {}
+      const lat = el.lat ?? el.center?.lat ?? 0
+      const lng = el.lon ?? el.center?.lon ?? 0
+      return {
+        osm_id: el.id,
+        osm_type: el.type as 'node' | 'way' | 'relation',
+        name: tags.name,
+        lat,
+        lng,
+        category,
+        address: {
+          road: tags['addr:street'],
+          city: tags['addr:city'] ?? city,
+          country: tags['addr:country'] ?? country,
+          postcode: tags['addr:postcode'],
+        },
+        website: tags.website ?? tags.url,
+        phone: tags.phone ?? tags['contact:phone'],
+        email: tags.email ?? tags['contact:email'],
+        opening_hours: tags.opening_hours,
+        tags: Object.fromEntries(
+          Object.entries(tags).filter(([k]) =>
+            ['name', 'amenity', 'tourism', 'leisure', 'cuisine', 'stars', 'description'].includes(k)
+          )
+        ),
+      }
+    })
+}
+
+// ---------- Enrich (scrape + LLM) ----------
+
+const OPENROUTER_MODELS = [
+  'google/gemma-3-27b-it:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'liquid/lfm-2.5-1.2b-instruct:free',
+]
+
+async function enrichVenue(
+  target: string,
+  context: string,
+  apiKey?: string,
+): Promise<EnrichedVenue> {
+  const scraped = await scrape(target)
+
+  if (!apiKey) {
+    return { url: target, scraped, extracted: pickFromScrape(scraped) }
+  }
+
+  const prompt = `You are a data extraction assistant. Given scraped text from a venue website, extract structured contact information as JSON.
+
+Context: ${context || 'venue contact details'}
+
+Website title: ${scraped.title ?? ''}
+Description: ${scraped.description ?? ''}
+Text excerpt: ${scraped.raw_text_excerpt ?? ''}
+Emails found: ${scraped.emails.join(', ') || 'none'}
+Phones found: ${scraped.phones.join(', ') || 'none'}
+Instagram handles: ${scraped.instagram_handles.join(', ') || 'none'}
+Addresses: ${scraped.addresses.join('; ') || 'none'}
+
+Return ONLY valid JSON matching this schema (null for missing fields):
+{
+  "name": "<venue name>",
+  "email": "<best contact email or null>",
+  "phone": "<best contact phone or null>",
+  "instagram": "<instagram handle without @ or null>",
+  "address": "<full address or null>",
+  "description": "<one-line venue description or null>",
+  "booking_contact": "<booking-specific email or name if found, else null>"
+}`
+
+  let lastErr: Error | null = null
+  for (const model of OPENROUTER_MODELS) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://venue-outreach-db.pages.dev',
+          'X-Title': 'VenueOutreach',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 512,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      })
+      const data = (await res.json()) as { choices?: { message: { content: string } }[] }
+      if (!res.ok || !data.choices) continue
+      const raw = data.choices[0].message.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const extracted = JSON.parse(raw)
+      return { url: target, scraped, extracted }
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error(String(e))
+    }
+  }
+
+  // LLM failed — return regex-extracted data as fallback
+  return { url: target, scraped, extracted: pickFromScrape(scraped) }
+}
+
+function pickFromScrape(s: ScrapeResult): EnrichedVenue['extracted'] {
+  return {
+    name: s.title,
+    email: s.emails[0],
+    phone: s.phones[0],
+    instagram: s.instagram_handles[0],
+    address: s.addresses[0],
+    description: s.description,
+    booking_contact: s.emails.find(e => /(booking|reserv|event|info)/i.test(e)),
+  }
 }
 
 // ---------- Brave Search ----------

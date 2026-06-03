@@ -211,7 +211,50 @@ export function exportJson(venues: Venue[]) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `crete-venues-${new Date().toISOString().slice(0, 10)}.json`
+  a.download = `venues-${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export function exportCsv(venues: Venue[]) {
+  const COLS: Array<{ header: string; get: (v: Venue) => string }> = [
+    { header: 'name', get: v => v.name },
+    { header: 'city', get: v => v.city },
+    { header: 'district', get: v => v.district ?? '' },
+    { header: 'category', get: v => v.category },
+    { header: 'entity_type', get: v => v.entity_type ?? 'venue' },
+    { header: 'status', get: v => v.status },
+    { header: 'website', get: v => v.website ?? '' },
+    { header: 'email', get: v => v.email ?? '' },
+    { header: 'instagram', get: v => v.instagram ?? '' },
+    { header: 'facebook', get: v => v.facebook ?? '' },
+    { header: 'phone', get: v => v.phone ?? '' },
+    { header: 'booking_contact', get: v => v.booking_contact ?? '' },
+    { header: 'music_type', get: v => v.music_type ?? '' },
+    { header: 'has_djs', get: v => v.has_djs ? 'true' : 'false' },
+    { header: 'has_events', get: v => v.has_events ? 'true' : 'false' },
+    { header: 'has_audio', get: v => v.has_audio ? 'true' : 'false' },
+    { header: 'outdoor', get: v => v.outdoor ? 'true' : 'false' },
+    { header: 'tourist_area', get: v => v.tourist_area ? 'true' : 'false' },
+    { header: 'luxury_score', get: v => String(v.luxury_score) },
+    { header: 'tags', get: v => (v.tags ?? []).join(';') },
+    { header: 'notes', get: v => v.notes ?? '' },
+    { header: 'last_contacted', get: v => v.last_contacted ?? '' },
+    { header: 'source', get: v => v.source ?? '' },
+    { header: 'created_at', get: v => v.created_at },
+    { header: 'updated_at', get: v => v.updated_at },
+  ]
+
+  const escape = (val: string) => `"${val.replace(/"/g, '""')}"`
+  const header = COLS.map(c => escape(c.header)).join(',')
+  const rows = venues.map(v => COLS.map(c => escape(c.get(v))).join(','))
+  const csv = [header, ...rows].join('\r\n')
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `venues-${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }

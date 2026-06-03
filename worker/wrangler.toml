@@ -1,16 +1,17 @@
-name = "crete-scraper"
+name = "venue-scraper"
 main = "src/index.ts"
 compatibility_date = "2025-05-01"
 compatibility_flags = ["nodejs_compat"]
 
-# After deploy, the worker URL becomes https://crete-scraper.<your-account>.workers.dev
-# Set this URL as VITE_SCRAPER_URL in the frontend .env.
+# After deploy, the worker URL becomes https://venue-scraper.<your-account>.workers.dev
+# Set this URL as VITE_SCRAPER_URL in venue-outreach-db and VITE_SCRAPER_URL in athar-eventplanner.
 
-# Optional: bind a secret for Brave Search.
-# Set via: wrangler secret put BRAVE_API_KEY
-# Without it, /search returns 503 but /scrape still works.
+# Secrets (set via wrangler secret put <NAME>):
+#   BRAVE_API_KEY      — optional, enables /search (Brave Search API, 2k/month free)
+#   OPENROUTER_API_KEY — optional, enables LLM extraction in /enrich (free models used)
+# Without secrets, /scrape and /discover still work (regex + Overpass, fully free).
 
 # CORS allowlist — comma-separated origins, or "*" for any.
-# Override per-environment for production.
+# Tighten in production: "https://venue-outreach-db.pages.dev,https://athar-eventplanner.pages.dev"
 [vars]
 ALLOWED_ORIGINS = "*"

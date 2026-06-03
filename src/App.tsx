@@ -7,7 +7,7 @@ import { OutreachPanel } from './components/OutreachPanel'
 import { DiscoveryPanel } from './components/DiscoveryPanel'
 import { MapView } from './components/MapView'
 import { ScraperStatusBadge } from './components/ScraperStatusBadge'
-import { exportJson, resetLocalToSeed } from './storage'
+import { exportJson, exportCsv, resetLocalToSeed } from './storage'
 import { scraperEnabled } from './scraper'
 import type { City, Category, OutreachStatus, Tag, Venue } from './types'
 import './App.css'
@@ -105,8 +105,11 @@ export default function App() {
             {storageMode === 'supabase' ? 'Supabase' : 'localStorage'}
           </span>
           <ScraperStatusBadge />
-          <button className="link-btn" onClick={() => exportJson(venues)}>
-            Export JSON
+          <button className="link-btn" onClick={() => exportCsv(venues)} title="Download all venues as CSV">
+            ⬇ Download CSV
+          </button>
+          <button className="link-btn" onClick={() => exportJson(venues)} title="Download all venues as JSON">
+            ⬇ Download JSON
           </button>
           <button
             className="link-btn"
