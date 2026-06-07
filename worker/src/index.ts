@@ -136,10 +136,27 @@ export default {
         return json({ results }, 200, corsHeaders)
       }
       if (url.pathname === '/discover' && req.method === 'POST') {
-        const body = await req.json<{ city?: string; category?: string; country?: string; limit?: number }>()
-        if (!body.city || !body.category) return json({ error: 'city and category required' }, 400, corsHeaders)
-        const results = await discoverVenues(body.city, body.category, body.country ?? '', body.limit ?? 30)
-        return json({ results }, 200, corsHeaders)
+        const body = await req.json<{
+          city?: string
+          location?: string   // free-text alternative to city+country
+          category?: string
+          categories?: string[] // run multiple categories and merge
+          country?: string
+          limit?: number
+        }>()
+        const cityName = body.city ?? body.location ?? ''
+        if (!cityName || !body.category && !body.categories?.length) {
+          return json({ error: 'city/location and category/categories required' }, 400, corsHeaders)
+        }
+        const cats = body.categories?.length ? body.categories : [body.category!]
+        const seen = new Map<number, DiscoveredVenue>()
+        for (const cat of cats) {
+          const partial = await discoverVenues(cityName, cat, body.country ?? '', body.limit ?? 50)
+          for (const v of partial) {
+            if (!seen.has(v.osm_id)) seen.set(v.osm_id, v)
+          }
+        }
+        return json({ results: Array.from(seen.values()) }, 200, corsHeaders)
       }
       if (url.pathname === '/enrich' && req.method === 'POST') {
         const body = await req.json<{ url?: string; context?: string }>()
@@ -334,20 +351,34 @@ function resolveOsmTags(category: string): string[][] {
   return OSM_TAGS[key] ?? OSM_TAGS[key.split(' ')[0]] ?? [['amenity', 'nightclub']]
 }
 
-function buildOverpassQuery(city: string, country: string, tagPairs: string[][]): string {
-  // Build a union of node/way/relation queries for each tag pair
+// Resolve a human location string to a [south, west, north, east] bounding box
+// using Nominatim (OpenStreetMap geocoder) — free, no API key required.
+async function resolveBbox(location: string): Promise<[number, number, number, number] | null> {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'VenueOutreachDB/1.0 (venue-discovery)' },
+    })
+    if (!res.ok) return null
+    const data = (await res.json()) as { boundingbox?: string[] }[]
+    const bb = data[0]?.boundingbox
+    if (!bb || bb.length < 4) return null
+    // Nominatim returns [south, north, west, east]
+    return [parseFloat(bb[0]), parseFloat(bb[2]), parseFloat(bb[1]), parseFloat(bb[3])]
+  } catch {
+    return null
+  }
+}
+
+function buildOverpassQueryBbox(bbox: [number, number, number, number], tagPairs: string[][]): string {
+  const [s, w, n, e] = bbox
   const filters = tagPairs
-    .map(([k, v]) =>
-      [`node["${k}"="${v}"](area.searchArea);`,
-       `way["${k}"="${v}"](area.searchArea);`].join('\n  ')
-    )
+    .flatMap(([k, v]) => [
+      `node["${k}"="${v}"](${s},${w},${n},${e});`,
+      `way["${k}"="${v}"](${s},${w},${n},${e});`,
+    ])
     .join('\n  ')
-
-  const areaFilter = country
-    ? `area[name="${city}"]["ISO3166-2"~"${country.toUpperCase()}"]->.searchArea;`
-    : `area[name="${city}"][admin_level~"^(4|6|7|8)$"]->.searchArea;`
-
-  return `[out:json][timeout:25];\n${areaFilter}\n(\n  ${filters}\n);\nout center tags;`
+  return `[out:json][timeout:25];\n(\n  ${filters}\n);\nout center tags;`
 }
 
 async function discoverVenues(
@@ -357,12 +388,29 @@ async function discoverVenues(
   limit: number,
 ): Promise<DiscoveredVenue[]> {
   const tagPairs = resolveOsmTags(category)
-  const query = buildOverpassQuery(city, country, tagPairs)
+
+  // Resolve city → bbox via Nominatim. Fall back to area-name query on failure.
+  const locationQuery = country ? `${city}, ${country}` : city
+  const bbox = await resolveBbox(locationQuery)
+
+  let overpassQuery: string
+  if (bbox) {
+    overpassQuery = buildOverpassQueryBbox(bbox, tagPairs)
+  } else {
+    // Legacy area-name fallback (less reliable for non-ASCII city names)
+    const filters = tagPairs
+      .flatMap(([k, v]) => [`node["${k}"="${v}"](area.a);`, `way["${k}"="${v}"](area.a);`])
+      .join('\n  ')
+    const areaFilter = country
+      ? `area[name="${city}"]["ISO3166-2"~"${country.toUpperCase()}"]->.a;`
+      : `area[name="${city}"][admin_level~"^(4|6|7|8)$"]->.a;`
+    overpassQuery = `[out:json][timeout:25];\n${areaFilter}\n(\n  ${filters}\n);\nout center tags;`
+  }
 
   const res = await fetch('https://overpass-api.de/api/interpreter', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(query)}`,
+    body: `data=${encodeURIComponent(overpassQuery)}`,
   })
 
   if (!res.ok) {

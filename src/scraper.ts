@@ -133,6 +133,33 @@ export async function searchPlaces(query: string, options?: AiScraperOptions): P
   return data.results
 }
 
+export interface OsmVenue {
+  osm_id: number
+  osm_type: string
+  name: string
+  lat: number
+  lng: number
+  category: string
+  address: { road?: string; city?: string; country?: string; postcode?: string }
+  website?: string
+  phone?: string
+  email?: string
+  opening_hours?: string
+}
+
+export async function discoverByLocation(
+  location: string,
+  categories: string[],
+  options?: AiScraperOptions,
+): Promise<OsmVenue[]> {
+  const data = await requestJson<{ results: OsmVenue[] }>(
+    '/discover',
+    { location, categories, limit: 50 },
+    options,
+  )
+  return data.results
+}
+
 export async function enrichLead(
   input: {
     name: string

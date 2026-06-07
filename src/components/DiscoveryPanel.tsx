@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { City, Category, Venue, VenueDraft } from '../types'
 import { CITIES, CATEGORIES } from '../types'
-import { SEARCH_LAUNCHERS, enrichLead, scrapeUrl, scraperEnabled, searchWeb, searchPlaces, type SearchResult, type PlacesResult } from '../scraper'
+import { SEARCH_LAUNCHERS, enrichLead, scrapeUrl, scraperEnabled, searchWeb, searchPlaces, discoverByLocation, type SearchResult, type PlacesResult, type OsmVenue } from '../scraper'
 import { classifyEntityType, findExistingVenueByName, toVenueDraft, type ImportedLeadRow } from '../importCsv'
 import { DEFAULT_AI_SETTINGS, loadAiSettings, saveAiSettings } from '../aiSettings'
 import { parseUploadedSpreadsheet } from '../importApi'
@@ -126,6 +126,16 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
   const [addingFromMaps, setAddingFromMaps] = useState(false)
   const [addMapsProgress, setAddMapsProgress] = useState('')
   // ── end Google Maps state ─────────────────────────────────────────────────
+
+  // ── Free discovery (OpenStreetMap) state ──────────────────────────────────
+  const [osmLocation, setOsmLocation] = useState('Chania, Crete')
+  const [osmSearching, setOsmSearching] = useState(false)
+  const [osmResults, setOsmResults] = useState<OsmVenue[]>([])
+  const [osmError, setOsmError] = useState<string | null>(null)
+  const [selectedOsmIds, setSelectedOsmIds] = useState<Set<number>>(new Set())
+  const [addingFromOsm, setAddingFromOsm] = useState(false)
+  const [addOsmProgress, setAddOsmProgress] = useState('')
+  // ── end Free discovery state ──────────────────────────────────────────────
 
   const [draftCity, setDraftCity] = useState<City>('Berlin')
   const [draftCategory, setDraftCategory] = useState<Category>('Beach Club')
@@ -360,6 +370,72 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
     setSelectedMapsIds(new Set())
   }
   // ── end Google Maps handlers ──────────────────────────────────────────────
+
+  // ── Free discovery (OpenStreetMap) handlers ───────────────────────────────
+  const OSM_CATEGORIES = ['nightclub', 'bar', 'bar with djs', 'beach club', 'live music venue', 'event space']
+
+  const searchOsm = async () => {
+    if (!osmLocation.trim()) return
+    setOsmSearching(true)
+    setOsmError(null)
+    setOsmResults([])
+    setSelectedOsmIds(new Set())
+    try {
+      const results = await discoverByLocation(osmLocation.trim(), OSM_CATEGORIES, aiSettings)
+      setOsmResults(results)
+    } catch (err) {
+      setOsmError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setOsmSearching(false)
+    }
+  }
+
+  const toggleOsmId = (id: number) => {
+    setSelectedOsmIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id) else next.add(id)
+      return next
+    })
+  }
+
+  const addSelectedFromOsm = async () => {
+    const toAdd = osmResults.filter(r => selectedOsmIds.has(r.osm_id))
+    if (toAdd.length === 0) return
+    const inferredCity = (osmLocation.split(',')[0]?.trim() || osmLocation) as City
+    setAddingFromOsm(true)
+    for (const [i, venue] of toAdd.entries()) {
+      setAddOsmProgress(`Adding ${i + 1}/${toAdd.length}: ${venue.name}`)
+      if (existingNames.has(venue.name.toLowerCase())) continue
+      const category = (PLACES_TYPE_TO_CATEGORY[venue.category] ?? 'Other') as Category
+      try {
+        await onAdd({
+          name: venue.name,
+          category,
+          city: inferredCity,
+          entity_type: classifyEntityType(venue.name, category),
+          website: venue.website,
+          phone: venue.phone,
+          email: venue.email,
+          notes: venue.address.road ? `${venue.address.road}, ${venue.address.city ?? inferredCity}` : undefined,
+          has_djs: venue.category === 'nightclub' || venue.category === 'bar with djs',
+          has_events: true,
+          has_audio: false,
+          outdoor: venue.category === 'beach club',
+          luxury_score: 2,
+          tourist_area: true,
+          status: 'new',
+          tags: [inferredCity.toLowerCase(), venue.category].filter(Boolean),
+          source: `osm:${venue.osm_id}`,
+        })
+      } catch {
+        // skip
+      }
+    }
+    setAddOsmProgress(`Done — added ${toAdd.length} venues.`)
+    setAddingFromOsm(false)
+    setSelectedOsmIds(new Set())
+  }
+  // ── end Free discovery handlers ───────────────────────────────────────────
 
   const quickAdd = async () => {
     if (!quickName.trim()) return
@@ -739,6 +815,77 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
           ) : null}
           {!scraperEnabled ? (
             <div className="muted small">Region scan requires the scraper backend. Run locally or set VITE_SCRAPER_URL.</div>
+          ) : null}
+        </div>
+
+        {/* ── Free discovery (OpenStreetMap) ──────────────────────────── */}
+        <div className="card discovery-card">
+          <h3>Free discovery <span className="scan-badge own" style={{ verticalAlign: 'middle' }}>no API key</span></h3>
+          <p className="muted small">
+            Uses OpenStreetMap via Overpass. Searches nightclubs, bars, beach clubs, and live music venues. Works for any city worldwide — completely free.
+          </p>
+          <div className="search-row">
+            <input
+              value={osmLocation}
+              onChange={e => setOsmLocation(e.target.value)}
+              placeholder="e.g. Chania, Crete"
+              onKeyDown={e => { if (e.key === 'Enter' && !osmSearching) void searchOsm() }}
+            />
+            <button
+              className="primary-btn"
+              onClick={() => void searchOsm()}
+              disabled={osmSearching || !osmLocation.trim()}
+            >
+              {osmSearching ? 'Searching…' : 'Search'}
+            </button>
+          </div>
+
+          {osmError ? <div className="error">{osmError}</div> : null}
+
+          {osmResults.length > 0 ? (
+            <div className="scan-results-wrapper">
+              <div className="scan-results-toolbar">
+                <div className="scan-summary">{osmResults.length} venues found</div>
+                <div className="scan-filter-row">
+                  <button className="link-btn" onClick={() => setSelectedOsmIds(new Set(osmResults.map(r => r.osm_id)))}>Select all</button>
+                  <button className="link-btn" onClick={() => setSelectedOsmIds(new Set())}>Clear</button>
+                </div>
+              </div>
+              <ul className="scan-result-list">
+                {osmResults.map(r => (
+                  <li key={r.osm_id} className={`scan-result-item ${selectedOsmIds.has(r.osm_id) ? 'selected' : ''}`}>
+                    <label className="scan-result-check">
+                      <input type="checkbox" checked={selectedOsmIds.has(r.osm_id)} onChange={() => toggleOsmId(r.osm_id)} />
+                    </label>
+                    <div className="scan-result-body">
+                      <div className="scan-result-title">{r.name}</div>
+                      {r.address.road ? <div className="muted small">{r.address.road}</div> : null}
+                      {r.phone ? <div className="muted small">{r.phone}</div> : null}
+                      {r.website ? (
+                        <a className="scan-result-url cell-link" href={r.website} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
+                          {r.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                        </a>
+                      ) : null}
+                    </div>
+                    <div className="scan-result-actions">
+                      <span className="scan-badge dir">{r.category}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {selectedOsmIds.size > 0 ? (
+                <div className="scan-add-bar">
+                  {addOsmProgress ? <span className="muted small">{addOsmProgress}</span> : null}
+                  <button className="primary-btn" onClick={() => void addSelectedFromOsm()} disabled={addingFromOsm}>
+                    {addingFromOsm ? 'Adding…' : `Add ${selectedOsmIds.size} venue${selectedOsmIds.size !== 1 ? 's' : ''}`}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!osmSearching && osmResults.length === 0 && osmError === null ? (
+            <div className="muted small">Enter any city and click Search — no account needed.</div>
           ) : null}
         </div>
 
