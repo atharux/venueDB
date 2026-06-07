@@ -11,7 +11,7 @@
  */
 
 import type { AiScraperOptions, SearchResult } from './scraper'
-import { searchWeb } from './scraper'
+import { searchWeb, discoverByLocation } from './scraper'
 
 // ---------------------------------------------------------------------------
 // Blacklisted aggregator domains — useful for human browsing but not for
@@ -176,6 +176,28 @@ export async function scanRegion(
   // Sort: own sites first, then aggregators
   const all = Array.from(seen.values())
   all.sort((a, b) => Number(b.likelyOwnSite) - Number(a.likelyOwnSite))
+
+  // If Brave search returned nothing (key not set), fall back to free OSM discovery.
+  if (all.length === 0 && !signal?.aborted) {
+    onProgress({ done: 0, total: 1, currentQuery: 'Falling back to OpenStreetMap…' })
+    try {
+      const osmCategories = ['nightclub', 'bar', 'bar with djs', 'beach club', 'live music venue', 'event space']
+      const osmVenues = await discoverByLocation(location, osmCategories, options)
+      onProgress({ done: 1, total: 1, currentQuery: '' })
+      return osmVenues
+        .filter(v => v.name)
+        .map(v => ({
+          title: v.name,
+          url: v.website ?? `https://www.google.com/maps/search/${encodeURIComponent(v.name + ' ' + location)}`,
+          description: [v.category, v.address.road, v.phone].filter(Boolean).join(' · '),
+          query: `osm:${v.category}`,
+          likelyOwnSite: Boolean(v.website),
+        }))
+    } catch {
+      // OSM also failed — return empty
+    }
+  }
+
   return all
 }
 
