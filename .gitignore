@@ -28,3 +28,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+scripts/scrapers/**/__pycache__
+scripts/**/__pycache__
