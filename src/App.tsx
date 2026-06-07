@@ -71,9 +71,9 @@ export default function App() {
     <div className={`app ${tab === 'festivals' ? 'is-festivals' : ''}`}>
       <header className="app-header">
         <div className="brand">
-          <div className="brand-mark">BS</div>
+          <div className="brand-mark">VI</div>
           <div>
-            <div className="brand-title">Battle School Venue Intel</div>
+            <div className="brand-title">Venue Intelligence</div>
             <div className="brand-sub">Scout · Qualify · Contact · Convert</div>
           </div>
         </div>
@@ -203,7 +203,7 @@ export default function App() {
           {' '}{storageMode === 'supabase' ? 'cloud sync' : 'browser-local'} ·
           Scraper {scraperEnabled ? 'online' : 'offline (set VITE_SCRAPER_URL in deployed mode)'}
         </span>
-        <span className="muted">Battle School Venue Intel — MVP ops console</span>
+        <span className="muted">Venue Intelligence — ops console</span>
       </footer>
     </div>
   )

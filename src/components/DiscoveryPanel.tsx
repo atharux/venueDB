@@ -578,6 +578,77 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
   return (
     <section className="discovery-panel">
       <div className="discovery-grid">
+        {/* ── Venue Intelligence discovery (OpenStreetMap) ─────────────── */}
+        <div className="card discovery-card">
+          <h3>Venue discovery <span className="scan-badge own" style={{ verticalAlign: 'middle' }}>free</span></h3>
+          <p className="muted small">
+            Search any city for nightclubs, bars, beach clubs, and live music venues. No API key needed.
+          </p>
+          <div className="search-row">
+            <input
+              value={osmLocation}
+              onChange={e => setOsmLocation(e.target.value)}
+              placeholder="e.g. Chania, Crete"
+              onKeyDown={e => { if (e.key === 'Enter' && !osmSearching) void searchOsm() }}
+            />
+            <button
+              className="primary-btn"
+              onClick={() => void searchOsm()}
+              disabled={osmSearching || !osmLocation.trim()}
+            >
+              {osmSearching ? 'Searching…' : 'Search'}
+            </button>
+          </div>
+
+          {osmError ? <div className="error">{osmError}</div> : null}
+
+          {osmResults.length > 0 ? (
+            <div className="scan-results-wrapper">
+              <div className="scan-results-toolbar">
+                <div className="scan-summary">{osmResults.length} venues found</div>
+                <div className="scan-filter-row">
+                  <button className="link-btn" onClick={() => setSelectedOsmIds(new Set(osmResults.map(r => r.osm_id)))}>Select all</button>
+                  <button className="link-btn" onClick={() => setSelectedOsmIds(new Set())}>Clear</button>
+                </div>
+              </div>
+              <ul className="scan-result-list">
+                {osmResults.map(r => (
+                  <li key={r.osm_id} className={`scan-result-item ${selectedOsmIds.has(r.osm_id) ? 'selected' : ''}`}>
+                    <label className="scan-result-check">
+                      <input type="checkbox" checked={selectedOsmIds.has(r.osm_id)} onChange={() => toggleOsmId(r.osm_id)} />
+                    </label>
+                    <div className="scan-result-body">
+                      <div className="scan-result-title">{r.name}</div>
+                      {r.address.road ? <div className="muted small">{r.address.road}</div> : null}
+                      {r.phone ? <div className="muted small">{r.phone}</div> : null}
+                      {r.website ? (
+                        <a className="scan-result-url cell-link" href={r.website} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
+                          {r.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                        </a>
+                      ) : null}
+                    </div>
+                    <div className="scan-result-actions">
+                      <span className="scan-badge dir">{r.category}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {selectedOsmIds.size > 0 ? (
+                <div className="scan-add-bar">
+                  {addOsmProgress ? <span className="muted small">{addOsmProgress}</span> : null}
+                  <button className="primary-btn" onClick={() => void addSelectedFromOsm()} disabled={addingFromOsm}>
+                    {addingFromOsm ? 'Adding…' : `Add ${selectedOsmIds.size} venue${selectedOsmIds.size !== 1 ? 's' : ''}`}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!osmSearching && osmResults.length === 0 && osmError === null ? (
+            <div className="muted small">Enter any city and click Search.</div>
+          ) : null}
+        </div>
+
         <div className="card discovery-card">
           <h3>AI routing</h3>
           <p className="muted small">
@@ -815,77 +886,6 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
           ) : null}
           {!scraperEnabled ? (
             <div className="muted small">Region scan requires the scraper backend. Run locally or set VITE_SCRAPER_URL.</div>
-          ) : null}
-        </div>
-
-        {/* ── Free discovery (OpenStreetMap) ──────────────────────────── */}
-        <div className="card discovery-card">
-          <h3>Free discovery <span className="scan-badge own" style={{ verticalAlign: 'middle' }}>no API key</span></h3>
-          <p className="muted small">
-            Uses OpenStreetMap via Overpass. Searches nightclubs, bars, beach clubs, and live music venues. Works for any city worldwide — completely free.
-          </p>
-          <div className="search-row">
-            <input
-              value={osmLocation}
-              onChange={e => setOsmLocation(e.target.value)}
-              placeholder="e.g. Chania, Crete"
-              onKeyDown={e => { if (e.key === 'Enter' && !osmSearching) void searchOsm() }}
-            />
-            <button
-              className="primary-btn"
-              onClick={() => void searchOsm()}
-              disabled={osmSearching || !osmLocation.trim()}
-            >
-              {osmSearching ? 'Searching…' : 'Search'}
-            </button>
-          </div>
-
-          {osmError ? <div className="error">{osmError}</div> : null}
-
-          {osmResults.length > 0 ? (
-            <div className="scan-results-wrapper">
-              <div className="scan-results-toolbar">
-                <div className="scan-summary">{osmResults.length} venues found</div>
-                <div className="scan-filter-row">
-                  <button className="link-btn" onClick={() => setSelectedOsmIds(new Set(osmResults.map(r => r.osm_id)))}>Select all</button>
-                  <button className="link-btn" onClick={() => setSelectedOsmIds(new Set())}>Clear</button>
-                </div>
-              </div>
-              <ul className="scan-result-list">
-                {osmResults.map(r => (
-                  <li key={r.osm_id} className={`scan-result-item ${selectedOsmIds.has(r.osm_id) ? 'selected' : ''}`}>
-                    <label className="scan-result-check">
-                      <input type="checkbox" checked={selectedOsmIds.has(r.osm_id)} onChange={() => toggleOsmId(r.osm_id)} />
-                    </label>
-                    <div className="scan-result-body">
-                      <div className="scan-result-title">{r.name}</div>
-                      {r.address.road ? <div className="muted small">{r.address.road}</div> : null}
-                      {r.phone ? <div className="muted small">{r.phone}</div> : null}
-                      {r.website ? (
-                        <a className="scan-result-url cell-link" href={r.website} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
-                          {r.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-                        </a>
-                      ) : null}
-                    </div>
-                    <div className="scan-result-actions">
-                      <span className="scan-badge dir">{r.category}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              {selectedOsmIds.size > 0 ? (
-                <div className="scan-add-bar">
-                  {addOsmProgress ? <span className="muted small">{addOsmProgress}</span> : null}
-                  <button className="primary-btn" onClick={() => void addSelectedFromOsm()} disabled={addingFromOsm}>
-                    {addingFromOsm ? 'Adding…' : `Add ${selectedOsmIds.size} venue${selectedOsmIds.size !== 1 ? 's' : ''}`}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {!osmSearching && osmResults.length === 0 && osmError === null ? (
-            <div className="muted small">Enter any city and click Search — no account needed.</div>
           ) : null}
         </div>
 
