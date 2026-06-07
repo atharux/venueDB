@@ -115,6 +115,24 @@ export async function searchWeb(query: string, options?: AiScraperOptions): Prom
   return data.results
 }
 
+export interface PlacesResult {
+  place_id: string
+  name: string
+  address: string
+  lat: number
+  lng: number
+  phone?: string
+  website?: string
+  rating?: number
+  user_ratings_total?: number
+  primary_type?: string
+}
+
+export async function searchPlaces(query: string, options?: AiScraperOptions): Promise<PlacesResult[]> {
+  const data = await requestJson<{ results: PlacesResult[] }>('/places', { query }, options)
+  return data.results
+}
+
 export async function enrichLead(
   input: {
     name: string

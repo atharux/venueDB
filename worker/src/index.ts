@@ -4,6 +4,7 @@
  * Endpoints:
  *   POST /scrape    { url }                           → ScrapeResult
  *   POST /search    { query }                         → { results: SearchResult[] }  (BRAVE_API_KEY)
+ *   POST /places    { query }                         → { results: PlacesResult[] }  (GOOGLE_MAPS_API_KEY)
  *   POST /discover  { city, category, country?, limit? } → { results: DiscoveredVenue[] }  (Overpass/free)
  *   POST /enrich    { url, context? }                 → EnrichedVenue  (scrape + LLM)
  *   GET  /health                                      → { ok: true }
@@ -17,6 +18,20 @@ export interface Env {
   ALLOWED_ORIGINS: string
   BRAVE_API_KEY?: string
   OPENROUTER_API_KEY?: string
+  GOOGLE_MAPS_API_KEY?: string
+}
+
+interface PlacesResult {
+  place_id: string
+  name: string
+  address: string
+  lat: number
+  lng: number
+  phone?: string
+  website?: string
+  rating?: number
+  user_ratings_total?: number
+  primary_type?: string
 }
 
 interface ScrapeResult {
@@ -85,6 +100,7 @@ export default {
           ok: true,
           hasSearch: Boolean(env.BRAVE_API_KEY),
           hasEnrich: Boolean(env.OPENROUTER_API_KEY),
+          hasPlaces: Boolean(env.GOOGLE_MAPS_API_KEY),
         }, 200, corsHeaders)
       }
       if (url.pathname === '/scrape' && req.method === 'POST') {
@@ -104,6 +120,19 @@ export default {
         const { query } = await req.json<{ query?: string }>()
         if (!query) return json({ error: 'Missing query' }, 400, corsHeaders)
         const results = await braveSearch(query, env.BRAVE_API_KEY)
+        return json({ results }, 200, corsHeaders)
+      }
+      if (url.pathname === '/places' && req.method === 'POST') {
+        if (!env.GOOGLE_MAPS_API_KEY) {
+          return json(
+            { error: 'Places disabled. Set GOOGLE_MAPS_API_KEY via `wrangler secret put GOOGLE_MAPS_API_KEY`.' },
+            503,
+            corsHeaders,
+          )
+        }
+        const { query } = await req.json<{ query?: string }>()
+        if (!query) return json({ error: 'Missing query' }, 400, corsHeaders)
+        const results = await searchPlaces(query, env.GOOGLE_MAPS_API_KEY)
         return json({ results }, 200, corsHeaders)
       }
       if (url.pathname === '/discover' && req.method === 'POST') {
@@ -471,6 +500,61 @@ function pickFromScrape(s: ScrapeResult): EnrichedVenue['extracted'] {
 }
 
 // ---------- Brave Search ----------
+
+async function searchPlaces(textQuery: string, apiKey: string): Promise<PlacesResult[]> {
+  const fieldMask = [
+    'places.id',
+    'places.displayName',
+    'places.formattedAddress',
+    'places.location',
+    'places.nationalPhoneNumber',
+    'places.websiteUri',
+    'places.rating',
+    'places.userRatingCount',
+    'places.primaryType',
+  ].join(',')
+
+  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': fieldMask,
+    },
+    body: JSON.stringify({ textQuery, maxResultCount: 20, languageCode: 'en' }),
+  })
+
+  if (!res.ok) throw new Error(`Google Places ${res.status}: ${await res.text().then(t => t.slice(0, 200))}`)
+
+  const data = (await res.json()) as {
+    places?: {
+      id?: string
+      displayName?: { text?: string }
+      formattedAddress?: string
+      location?: { latitude?: number; longitude?: number }
+      nationalPhoneNumber?: string
+      websiteUri?: string
+      rating?: number
+      userRatingCount?: number
+      primaryType?: string
+    }[]
+  }
+
+  return (data.places ?? [])
+    .filter(p => p.id && p.displayName?.text)
+    .map(p => ({
+      place_id: p.id!,
+      name: p.displayName!.text!,
+      address: p.formattedAddress ?? '',
+      lat: p.location?.latitude ?? 0,
+      lng: p.location?.longitude ?? 0,
+      phone: p.nationalPhoneNumber,
+      website: p.websiteUri,
+      rating: p.rating,
+      user_ratings_total: p.userRatingCount,
+      primary_type: p.primaryType,
+    }))
+}
 
 async function braveSearch(query: string, apiKey: string): Promise<SearchResult[]> {
   const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10&country=GR`

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { City, Category, Venue, VenueDraft } from '../types'
 import { CITIES, CATEGORIES } from '../types'
-import { SEARCH_LAUNCHERS, enrichLead, scrapeUrl, scraperEnabled, searchWeb, type SearchResult } from '../scraper'
+import { SEARCH_LAUNCHERS, enrichLead, scrapeUrl, scraperEnabled, searchWeb, searchPlaces, type SearchResult, type PlacesResult } from '../scraper'
 import { classifyEntityType, findExistingVenueByName, toVenueDraft, type ImportedLeadRow } from '../importCsv'
 import { DEFAULT_AI_SETTINGS, loadAiSettings, saveAiSettings } from '../aiSettings'
 import { parseUploadedSpreadsheet } from '../importApi'
@@ -116,6 +116,16 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
   const [addScanProgress, setAddScanProgress] = useState('')
   const scanAbortRef = useRef<AbortController | null>(null)
   // ── end Region Scan state ────────────────────────────────────────────────
+
+  // ── Google Maps state ─────────────────────────────────────────────────────
+  const [mapsLocation, setMapsLocation] = useState('Chania, Crete')
+  const [mapsSearching, setMapsSearching] = useState(false)
+  const [mapsResults, setMapsResults] = useState<PlacesResult[]>([])
+  const [mapsError, setMapsError] = useState<string | null>(null)
+  const [selectedMapsIds, setSelectedMapsIds] = useState<Set<string>>(new Set())
+  const [addingFromMaps, setAddingFromMaps] = useState(false)
+  const [addMapsProgress, setAddMapsProgress] = useState('')
+  // ── end Google Maps state ─────────────────────────────────────────────────
 
   const [draftCity, setDraftCity] = useState<City>('Berlin')
   const [draftCategory, setDraftCategory] = useState<Category>('Beach Club')
@@ -264,6 +274,92 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
     clearSelection()
   }
   // ── end Region Scan handlers ──────────────────────────────────────────────
+
+  // ── Google Maps handlers ──────────────────────────────────────────────────
+  const MAPS_VENUE_TYPES = [
+    'nightclub', 'bar with djs', 'beach club', 'rooftop bar', 'live music venue', 'cocktail bar',
+  ]
+
+  const searchMaps = async () => {
+    if (!mapsLocation.trim()) return
+    setMapsSearching(true)
+    setMapsError(null)
+    setMapsResults([])
+    setSelectedMapsIds(new Set())
+    const seen = new Map<string, PlacesResult>()
+    try {
+      for (const type of MAPS_VENUE_TYPES) {
+        const query = `${type} in ${mapsLocation.trim()}`
+        try {
+          const results = await searchPlaces(query, aiSettings)
+          for (const r of results) {
+            if (!seen.has(r.place_id)) seen.set(r.place_id, r)
+          }
+        } catch {
+          // single type failing doesn't abort the rest
+        }
+      }
+      setMapsResults(Array.from(seen.values()))
+    } catch (err) {
+      setMapsError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setMapsSearching(false)
+    }
+  }
+
+  const toggleMapsId = (id: string) => {
+    setSelectedMapsIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id) else next.add(id)
+      return next
+    })
+  }
+
+  const PLACES_TYPE_TO_CATEGORY: Record<string, string> = {
+    night_club: 'Nightclub', bar: 'Bar with DJs', beach_bar: 'Beach Club',
+    resort: 'Beach Club', restaurant: 'Restaurant', music_venue: 'Live Music Venue',
+    event_venue: 'Event Space',
+  }
+
+  const addSelectedFromMaps = async () => {
+    const toAdd = mapsResults.filter(r => selectedMapsIds.has(r.place_id))
+    if (toAdd.length === 0) return
+    const inferredCity = (mapsLocation.split(',')[0]?.trim() || mapsLocation) as City
+    setAddingFromMaps(true)
+    for (const [i, place] of toAdd.entries()) {
+      setAddMapsProgress(`Adding ${i + 1}/${toAdd.length}: ${place.name}`)
+      const name = place.name
+      if (existingNames.has(name.toLowerCase())) continue
+      const category = (PLACES_TYPE_TO_CATEGORY[place.primary_type ?? ''] ?? 'Other') as Category
+      const luxuryScore = place.rating ? Math.min(5, Math.round(place.rating - 1)) : 2
+      try {
+        await onAdd({
+          name,
+          category,
+          city: inferredCity,
+          entity_type: classifyEntityType(name, category),
+          website: place.website,
+          phone: place.phone,
+          notes: place.address,
+          has_djs: ['night_club', 'bar'].includes(place.primary_type ?? ''),
+          has_events: true,
+          has_audio: false,
+          outdoor: ['beach_bar', 'resort'].includes(place.primary_type ?? ''),
+          luxury_score: luxuryScore,
+          tourist_area: true,
+          status: 'new',
+          tags: [inferredCity.toLowerCase(), place.primary_type ?? 'venue'].filter(Boolean),
+          source: `maps:${place.place_id}`,
+        })
+      } catch {
+        // skip failed rows
+      }
+    }
+    setAddMapsProgress(`Done — added ${toAdd.length} venues.`)
+    setAddingFromMaps(false)
+    setSelectedMapsIds(new Set())
+  }
+  // ── end Google Maps handlers ──────────────────────────────────────────────
 
   const quickAdd = async () => {
     if (!quickName.trim()) return
@@ -643,6 +739,88 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
           ) : null}
           {!scraperEnabled ? (
             <div className="muted small">Region scan requires the scraper backend. Run locally or set VITE_SCRAPER_URL.</div>
+          ) : null}
+        </div>
+
+        {/* ── Google Maps Discovery ────────────────────────────────────── */}
+        <div className="card discovery-card">
+          <h3>Google Maps discovery</h3>
+          <p className="muted small">
+            Searches Google Maps Places for nightclubs, bars, beach clubs, and live music venues in your location. Returns structured data — no scraping needed.
+          </p>
+          <div className="search-row">
+            <input
+              value={mapsLocation}
+              onChange={e => setMapsLocation(e.target.value)}
+              placeholder="e.g. Chania, Crete"
+              onKeyDown={e => { if (e.key === 'Enter' && !mapsSearching) void searchMaps() }}
+            />
+            <button
+              className="primary-btn"
+              onClick={() => void searchMaps()}
+              disabled={mapsSearching || !mapsLocation.trim()}
+            >
+              {mapsSearching ? 'Searching…' : 'Search Maps'}
+            </button>
+          </div>
+
+          {mapsError ? <div className="error">{mapsError}</div> : null}
+
+          {mapsResults.length > 0 ? (
+            <div className="scan-results-wrapper">
+              <div className="scan-results-toolbar">
+                <div className="scan-summary">{mapsResults.length} venues found</div>
+                <div className="scan-filter-row">
+                  <button className="link-btn" onClick={() => setSelectedMapsIds(new Set(mapsResults.map(r => r.place_id)))}>
+                    Select all
+                  </button>
+                  <button className="link-btn" onClick={() => setSelectedMapsIds(new Set())}>Clear</button>
+                </div>
+              </div>
+              <ul className="scan-result-list">
+                {mapsResults.map(r => (
+                  <li key={r.place_id} className={`scan-result-item ${selectedMapsIds.has(r.place_id) ? 'selected' : ''}`}>
+                    <label className="scan-result-check">
+                      <input
+                        type="checkbox"
+                        checked={selectedMapsIds.has(r.place_id)}
+                        onChange={() => toggleMapsId(r.place_id)}
+                      />
+                    </label>
+                    <div className="scan-result-body">
+                      <div className="scan-result-title">{r.name}</div>
+                      <div className="muted small">{r.address}</div>
+                      {r.phone ? <div className="muted small">{r.phone}</div> : null}
+                      {r.website ? (
+                        <a className="scan-result-url cell-link" href={r.website} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
+                          {r.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                        </a>
+                      ) : null}
+                    </div>
+                    <div className="scan-result-actions">
+                      {r.rating ? <span className="scan-badge own">★ {r.rating}</span> : null}
+                      <span className="scan-badge dir">{r.primary_type?.replace(/_/g, ' ') ?? 'venue'}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {selectedMapsIds.size > 0 ? (
+                <div className="scan-add-bar">
+                  {addMapsProgress ? <span className="muted small">{addMapsProgress}</span> : null}
+                  <button
+                    className="primary-btn"
+                    onClick={() => void addSelectedFromMaps()}
+                    disabled={addingFromMaps}
+                  >
+                    {addingFromMaps ? 'Adding…' : `Add ${selectedMapsIds.size} venue${selectedMapsIds.size !== 1 ? 's' : ''}`}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!mapsSearching && mapsResults.length === 0 && mapsError === null && mapsLocation ? (
+            <div className="muted small">Enter a location and click Search Maps. Requires GOOGLE_MAPS_API_KEY set in the Worker.</div>
           ) : null}
         </div>
 
