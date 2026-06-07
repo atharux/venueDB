@@ -320,7 +320,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
   const toggleMapsId = (id: string) => {
     setSelectedMapsIds(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id) else next.add(id)
+      if (next.has(id)) { next.delete(id) } else { next.add(id) }
       return next
     })
   }
@@ -393,7 +393,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
   const toggleOsmId = (id: number) => {
     setSelectedOsmIds(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id) else next.add(id)
+      if (next.has(id)) { next.delete(id) } else { next.add(id) }
       return next
     })
   }
