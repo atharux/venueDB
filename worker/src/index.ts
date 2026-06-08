@@ -409,7 +409,11 @@ async function discoverVenues(
 
   const res = await fetch('https://overpass-api.de/api/interpreter', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': '*/*',
+      'User-Agent': USER_AGENT,
+    },
     body: `data=${encodeURIComponent(overpassQuery)}`,
   })
 
