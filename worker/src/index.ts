@@ -82,7 +82,7 @@ interface EnrichedVenue {
 }
 
 const MAX_BYTES = 1_500_000 // 1.5 MB cap per fetch
-const USER_AGENT = 'CreteNightlifeBot/0.1 (+https://example.com/crete-bot)'
+const USER_AGENT = 'VenueIntelBot/1.0 (+https://venue-outreach-db.pages.dev)'
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
