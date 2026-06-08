@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { City, Category, Venue, VenueDraft } from '../types'
+import type { City, Category, Tag, Venue, VenueDraft } from '../types'
 import { CITIES, CATEGORIES } from '../types'
 import { SEARCH_LAUNCHERS, enrichLead, scrapeUrl, scraperEnabled, searchWeb, searchPlaces, discoverByLocation, type SearchResult, type PlacesResult, type OsmVenue } from '../scraper'
 import { classifyEntityType, findExistingVenueByName, toVenueDraft, type ImportedLeadRow } from '../importCsv'
@@ -355,10 +355,10 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
           has_events: true,
           has_audio: false,
           outdoor: ['beach_bar', 'resort'].includes(place.primary_type ?? ''),
-          luxury_score: luxuryScore,
+          luxury_score: luxuryScore as 0 | 1 | 2 | 3 | 4 | 5,
           tourist_area: true,
           status: 'new',
-          tags: [inferredCity.toLowerCase(), place.primary_type ?? 'venue'].filter(Boolean),
+          tags: [inferredCity.toLowerCase(), place.primary_type ?? 'venue'].filter(Boolean) as Tag[],
           source: `maps:${place.place_id}`,
         })
       } catch {
@@ -424,7 +424,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
           luxury_score: 2,
           tourist_area: true,
           status: 'new',
-          tags: [inferredCity.toLowerCase(), venue.category].filter(Boolean),
+          tags: [inferredCity.toLowerCase(), venue.category].filter(Boolean) as Tag[],
           source: `osm:${venue.osm_id}`,
         })
       } catch {
