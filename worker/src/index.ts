@@ -639,7 +639,7 @@ function buildCorsHeaders(origin: string, allowed: string): Record<string, strin
   return {
     'Access-Control-Allow-Origin': allow,
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, X-OpenRouter-Api-Key, X-OpenRouter-Model',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   }
