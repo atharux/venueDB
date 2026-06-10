@@ -4,7 +4,16 @@
 import type { ScrapeResult } from './types'
 
 const SCRAPER_URL = import.meta.env.VITE_SCRAPER_URL as string | undefined
-const SCRAPER_BASES = SCRAPER_URL ? [SCRAPER_URL] : ['/api', 'http://localhost:8787']
+// Production worker — last-resort fallback for builds where VITE_SCRAPER_URL
+// wasn't baked in (e.g. the Cloudflare Pages build env has no variables; .env
+// is gitignored and never reaches CI). The worker serves open CORS, so
+// cross-origin calls from the Pages domain work. Without this, the deployed
+// app only had '/api' (no /discover function, search bot-blocked) and
+// localhost (mixed-content blocked) — i.e. no working backend at all.
+const FALLBACK_WORKER_URL = 'https://venue-scraper.athar-hafiz.workers.dev'
+const SCRAPER_BASES = SCRAPER_URL
+  ? [SCRAPER_URL]
+  : ['/api', 'http://localhost:8787', FALLBACK_WORKER_URL]
 
 export const SCRAPER_BASE_LIST: readonly string[] = SCRAPER_BASES
 export const scraperEnabled = true
