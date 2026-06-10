@@ -183,6 +183,15 @@ a:hover {
   margin-top: 2px;
 }
 
+.brand-version {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  font-family: var(--mono);
+  margin-left: 8px;
+}
+
 .tabs {
   display: flex;
   gap: 6px;

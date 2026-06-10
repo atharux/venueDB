@@ -78,7 +78,12 @@ export default function App() {
         <div className="brand">
           <div className="brand-mark">VI</div>
           <div>
-            <div className="brand-title">Venue Intelligence</div>
+            <div className="brand-title">
+              Venue Intelligence
+              <span className="brand-version" title="deployed build · date">
+                {__APP_VERSION__} · {__BUILD_DATE__}
+              </span>
+            </div>
             <div className="brand-sub">Scout · Qualify · Contact · Convert</div>
           </div>
         </div>

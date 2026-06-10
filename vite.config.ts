@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, execSync } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -186,6 +186,23 @@ async function detectPython() {
   }
 }
 
+/**
+ * Deployment stamp shown next to the app name in the header. package.json
+ * stays at 0.0.0, so the git short SHA is the honest version identifier;
+ * Pages rebuilds on every push, so build date == deployment date.
+ */
+function gitShortSha(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+  } catch {
+    return 'dev'
+  }
+}
+
 export default defineConfig({
   plugins: [react(), intelApiPlugin()],
+  define: {
+    __APP_VERSION__: JSON.stringify(gitShortSha()),
+    __BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)),
+  },
 })
