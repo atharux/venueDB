@@ -10,6 +10,8 @@ compatibility_flags = ["nodejs_compat"]
 #   BRAVE_API_KEY        — optional, enables /search (Brave Search API, 2k/month free)
 #   OPENROUTER_API_KEY   — optional, enables LLM extraction in /enrich (free models used)
 #   GOOGLE_MAPS_API_KEY  — optional, enables /places (Google Maps Places API, needs billing)
+#   FOURSQUARE_API_KEY   — optional, adds Foursquare Places (free tier) to /discover
+#   YELP_API_KEY         — optional, adds Yelp Fusion (free tier) to /discover
 # Without secrets, /scrape and /discover still work (regex + Overpass, fully free).
 
 # CORS allowlist — comma-separated origins, or "*" for any.

@@ -1,16 +1,22 @@
 /**
  * Region Scanner
  *
- * Generates a battery of search queries for a given location and venue-type
- * vocabulary, runs them against the /search endpoint, then deduplicates and
- * returns a flat list of unique results.
+ * Two-phase venue discovery for a location:
  *
- * Why multiple queries: a single "Malia nightlife" search surfaces listicles.
- * Running "nightclub Malia Crete", "beach club Malia Crete", "bar Malia
- * Crete" etc. surfaces the actual venue websites that matter for outreach.
+ *   Phase 1 — OpenStreetMap structured discovery (free, no key, one request).
+ *             Returns actual venue records: name, website, phone, email.
+ *   Phase 2 — Web search battery (requires BRAVE_API_KEY on the worker).
+ *             Surfaces venues OSM doesn't know about plus official-site URLs.
+ *
+ * Results from both phases are merged and deduplicated by normalized URL
+ * (or by name for OSM venues without a website).
+ *
+ * Why multiple search queries: a single "Malia nightlife" search surfaces
+ * listicles. Running "nightclub Malia Crete", "beach club Malia Crete", etc.
+ * surfaces the actual venue websites that matter for outreach.
  */
 
-import type { AiScraperOptions, SearchResult } from './scraper'
+import type { AiScraperOptions, OsmVenue, SearchResult } from './scraper'
 import { searchWeb, discoverByLocation } from './scraper'
 
 // ---------------------------------------------------------------------------
@@ -46,8 +52,11 @@ export function isAggregator(url: string): boolean {
 // Query templates
 //
 // Two dimensions: venue TYPE keywords + discovery ANGLES.
-// Cross-joining a short type list with a short angle list gives ~12-18 unique
-// queries that collectively surface very different result sets.
+// Kept deliberately small: Brave's free tier allows 1 request/second and
+// 2,000 queries/month, so every angle in the grid costs real quota. Two
+// angles per type plus three freeform queries (~19 total) covers the result
+// space the old 37-query battery did — the extra angles returned near-
+// identical result sets.
 // ---------------------------------------------------------------------------
 const VENUE_TYPES = [
   'nightclub',
@@ -63,18 +72,18 @@ const VENUE_TYPES = [
 const DISCOVERY_ANGLES = [
   '{type} {location}',
   '{type} {location} official website',
-  '{type} {location} contact booking',
-  'best {type} {location}',
 ]
 
 // Additional free-form queries that don't follow the type+angle grid
 const FREEFORM_TEMPLATES = [
   '{location} nightlife venues',
   '{location} clubs and bars',
-  '{location} party scene 2024',
-  '{location} entertainment venue',
-  '{location} club official website contact',
+  '{location} entertainment venues',
 ]
+
+// Categories requested from the worker's /discover (Overpass) endpoint.
+// Same vocabulary the DiscoveryPanel free-discovery card uses.
+const OSM_CATEGORIES = ['nightclub', 'bar', 'bar with djs', 'beach club', 'live music venue', 'event space']
 
 /**
  * Generate the full battery of search queries for a given location.
@@ -112,7 +121,7 @@ export function generateRegionQueries(location: string): string[] {
 // Scan result — extends SearchResult with provenance metadata
 // ---------------------------------------------------------------------------
 export interface RegionScanResult extends SearchResult {
-  /** Which search query surfaced this result */
+  /** Which search query surfaced this result (osm:<category> for OSM hits) */
   query: string
   /** True if the URL looks like a venue's own site (not an aggregator) */
   likelyOwnSite: boolean
@@ -124,16 +133,45 @@ export interface RegionScanProgress {
   currentQuery: string
 }
 
+/** Map an OSM venue record into the scan-result shape the UI renders. */
+function osmToScanResult(v: OsmVenue, location: string): RegionScanResult {
+  return {
+    title: v.name,
+    url: v.website ?? `https://www.google.com/maps/search/${encodeURIComponent(v.name + ' ' + location)}`,
+    description: [v.category, v.address.road, v.phone, v.email].filter(Boolean).join(' · '),
+    query: `${v.source ?? 'osm'}:${v.category}`,
+    likelyOwnSite: Boolean(v.website),
+  }
+}
+
+/**
+ * Dedup key for merged results. Normalizes protocol/www/trailing slash so the
+ * same venue found via OSM and via search collapses to one row. OSM venues
+ * without a website get a synthetic Maps-search URL — dedupe those by name.
+ */
+function dedupKey(url: string, title: string): string {
+  const norm = url
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/+$/, '')
+  if (norm.startsWith('google.com/maps') || norm.startsWith('maps.google.')) {
+    return `name:${title.trim().toLowerCase()}`
+  }
+  return norm
+}
+
 /**
  * Run the full region scan for a location.
  *
- * Calls /search once per generated query, aggregates results, deduplicates
- * by URL, and returns the unique set. Results from aggregator domains are kept
- * in the list but flagged with likelyOwnSite=false so the UI can filter them.
+ * Phase 1 always queries OpenStreetMap (free, structured). Phase 2 runs the
+ * search battery on top when the search backend is available. Results are
+ * merged, deduplicated, and sorted with own-site venues first. Aggregator
+ * URLs are kept but flagged likelyOwnSite=false so the UI can filter them.
  *
  * @param location  Human-readable location string, e.g. "Malia, Crete"
  * @param options   AI/scraper options (API key forwarding)
- * @param onProgress  Called before each query with current progress
+ * @param onProgress  Called before each step with current progress
  * @param signal    AbortSignal — cancel the scan mid-flight
  */
 export async function scanRegion(
@@ -143,61 +181,69 @@ export async function scanRegion(
   signal?: AbortSignal,
 ): Promise<RegionScanResult[]> {
   const queries = generateRegionQueries(location)
-  const seen = new Map<string, RegionScanResult>() // keyed by URL
+  const total = queries.length + 1 // +1 for the OSM phase
+  const seen = new Map<string, RegionScanResult>()
 
+  const addResult = (r: RegionScanResult) => {
+    const key = dedupKey(r.url, r.title)
+    if (!seen.has(key)) seen.set(key, r)
+  }
+
+  // Phase 1 — OpenStreetMap discovery. This is the primary source: it returns
+  // real venue records instead of search-result links. It used to run only as
+  // a fallback when search returned literally zero results, so a couple of
+  // junk search hits would suppress dozens of real OSM venues.
+  onProgress({ done: 0, total, currentQuery: 'OpenStreetMap discovery…' })
+  if (!signal?.aborted) {
+    try {
+      const osmVenues = await discoverByLocation(location, OSM_CATEGORIES, options)
+      for (const v of osmVenues) {
+        if (v.name) addResult(osmToScanResult(v, location))
+      }
+    } catch {
+      // OSM down or unreachable — the search battery below still runs
+    }
+  }
+
+  // Phase 2 — web search battery.
+  let queriesFailed = 0
+  let queriesSucceeded = 0
   for (const [i, query] of queries.entries()) {
     if (signal?.aborted) break
 
-    onProgress({ done: i, total: queries.length, currentQuery: query })
+    onProgress({ done: i + 1, total, currentQuery: query })
 
     try {
       const hits = await searchWeb(query, options)
+      queriesSucceeded += 1
       for (const hit of hits) {
-        if (!seen.has(hit.url)) {
-          seen.set(hit.url, {
-            ...hit,
-            query,
-            likelyOwnSite: !isAggregator(hit.url),
-          })
-        }
+        addResult({
+          ...hit,
+          query,
+          likelyOwnSite: !isAggregator(hit.url),
+        })
       }
     } catch {
-      // A single query failing shouldn't abort the whole scan
+      // A single query failing shouldn't abort the whole scan — but if the
+      // first three all fail with zero successes, the search backend is
+      // unavailable (no Brave key) and every remaining query will fail too.
+      queriesFailed += 1
+      if (queriesSucceeded === 0 && queriesFailed >= 3) break
     }
 
-    // Throttle to avoid hammering the search API
+    // Brave free tier allows 1 request/second. The old 350ms throttle got
+    // most of the battery silently 429'd — that was the main "3 venues per
+    // region" failure mode.
     if (i < queries.length - 1 && !signal?.aborted) {
-      await delay(350)
+      await delay(1100)
     }
   }
 
-  onProgress({ done: queries.length, total: queries.length, currentQuery: '' })
+  onProgress({ done: total, total, currentQuery: '' })
 
-  // Sort: own sites first, then aggregators
+  // Sort: own sites first, then aggregators/maps links
   const all = Array.from(seen.values())
   all.sort((a, b) => Number(b.likelyOwnSite) - Number(a.likelyOwnSite))
-
-  // If Brave search returned nothing (key not set), fall back to free OSM discovery.
-  if (all.length === 0 && !signal?.aborted) {
-    onProgress({ done: 0, total: 1, currentQuery: 'Falling back to OpenStreetMap…' })
-    try {
-      const osmCategories = ['nightclub', 'bar', 'bar with djs', 'beach club', 'live music venue', 'event space']
-      const osmVenues = await discoverByLocation(location, osmCategories, options)
-      onProgress({ done: 1, total: 1, currentQuery: '' })
-      return osmVenues
-        .filter(v => v.name)
-        .map(v => ({
-          title: v.name,
-          url: v.website ?? `https://www.google.com/maps/search/${encodeURIComponent(v.name + ' ' + location)}`,
-          description: [v.category, v.address.road, v.phone].filter(Boolean).join(' · '),
-          query: `osm:${v.category}`,
-          likelyOwnSite: Boolean(v.website),
-        }))
-    } catch {
-      // OSM also failed — return empty
-    }
-  }
-
   return all
 }
 

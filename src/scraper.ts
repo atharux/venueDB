@@ -136,6 +136,8 @@ export async function searchPlaces(query: string, options?: AiScraperOptions): P
 export interface OsmVenue {
   osm_id: number
   osm_type: string
+  /** Which discovery backend produced this record: 'osm' | 'foursquare' | 'yelp' */
+  source?: string
   name: string
   lat: number
   lng: number
@@ -154,7 +156,7 @@ export async function discoverByLocation(
 ): Promise<OsmVenue[]> {
   const data = await requestJson<{ results: OsmVenue[] }>(
     '/discover',
-    { location, categories, limit: 50 },
+    { location, categories, limit: 200 },
     options,
   )
   return data.results

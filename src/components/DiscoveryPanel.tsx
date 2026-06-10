@@ -425,7 +425,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
           tourist_area: true,
           status: 'new',
           tags: [inferredCity.toLowerCase(), venue.category].filter(Boolean) as Tag[],
-          source: `osm:${venue.osm_id}`,
+          source: `${venue.source ?? 'osm'}:${venue.osm_id}`,
         })
       } catch {
         // skip
