@@ -1,3 +1,5 @@
+import { extractPhoneCandidates } from './src/phone'
+
 export interface ScrapeResult {
   url: string
   fetched_at: string
@@ -109,14 +111,9 @@ export async function scrapeTarget(target: string): Promise<ScrapeResult> {
   )
   const instagram_handles = uniq([...igFromLinks, ...igFromText]).slice(0, 5)
 
-  const phones = uniq(
-    (text.match(/(?:\+?\d[\d\s()./-]{7,}\d)/g) ?? [])
-      .map(value => value.trim())
-      .filter(value => {
-        const digits = value.replace(/\D/g, '')
-        return digits.length >= 8 && digits.length <= 15
-      }),
-  ).slice(0, 5)
+  // tel:-link-first extraction with junk filtering (coordinates, year
+  // ranges, dates) — the old any-digit-run regex polluted the phone field.
+  const phones = extractPhoneCandidates(decoded, text).slice(0, 5)
 
   return {
     url: parsed.toString(),

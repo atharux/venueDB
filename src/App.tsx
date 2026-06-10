@@ -29,7 +29,7 @@ function entityOf(v: Venue): EntityType {
 }
 
 export default function App() {
-  const { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, storageMode } = useVenues()
+  const { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, cleanupPhones, storageMode } = useVenues()
   const [tab, setTab] = useState<TabId>('venues')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tableFilters, setTableFilters] = useState<TableFilters | undefined>(undefined)
@@ -150,6 +150,22 @@ export default function App() {
             }}
           >
             Delete duplicates
+          </button>
+          <button
+            className="link-btn"
+            onClick={() => {
+              if (confirm('Clear phone values that are not real phone numbers (scraped coordinates, dates, year ranges)? Valid numbers are kept.')) {
+                void cleanupPhones().then(({ cleared, normalized }) => {
+                  alert(
+                    cleared > 0 || normalized > 0
+                      ? `Cleared ${cleared} invalid phone${cleared !== 1 ? 's' : ''}${normalized > 0 ? `, normalized ${normalized}` : ''}.`
+                      : 'All stored phone numbers look valid.',
+                  )
+                })
+              }
+            }}
+          >
+            Clean phone numbers
           </button>
         </div>
       </header>

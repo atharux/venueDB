@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Venue, VenueDraft } from './types'
-import { deleteDuplicateVenues, listVenues, removeVenue, restoreSeedVenues, saveVenue, storageMode } from './storage'
+import { clearInvalidPhones, deleteDuplicateVenues, listVenues, removeVenue, restoreSeedVenues, saveVenue, storageMode } from './storage'
 
 function newId() {
   return (
@@ -125,5 +125,18 @@ export function useVenues() {
     }
   }, [])
 
-  return { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, storageMode }
+  const cleanupPhones = useCallback(async () => {
+    try {
+      const result = await clearInvalidPhones(venuesRef.current)
+      venuesRef.current = result.venues
+      setVenues(result.venues)
+      setError(null)
+      return { cleared: result.cleared, normalized: result.normalized }
+    } catch (err) {
+      setError(String(err))
+      return { cleared: 0, normalized: 0 }
+    }
+  }, [])
+
+  return { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, cleanupPhones, storageMode }
 }

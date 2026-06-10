@@ -249,15 +249,10 @@ async function scrape(target: string): Promise<ScrapeResult> {
   )
   const instagram_handles = uniq([...igFromLinks, ...igFromText]).slice(0, 5)
 
-  // Phones — international or Greek formats.
-  const phones = uniq(
-    (text.match(/(?:\+?\d[\d\s().-]{7,}\d)/g) ?? [])
-      .map(s => s.trim())
-      .filter(s => {
-        const digits = s.replace(/\D/g, '')
-        return digits.length >= 8 && digits.length <= 15
-      }),
-  ).slice(0, 5)
+  // Phones — tel:-link-first with junk filtering. Mirrors src/phone.ts
+  // (the worker imports nothing from outside worker/). The old any-digit-run
+  // regex matched coordinates, year ranges, dates and prices.
+  const phones = extractPhoneCandidates(decoded, text).slice(0, 5)
 
   // Addresses — Greek postcode anchor (5 digits) or "Crete"/"Greece" mention.
   const addresses = extractAddresses(text)
@@ -316,6 +311,40 @@ function decodeEntities(s: string): string {
 
 function uniq<T>(arr: T[]): T[] {
   return Array.from(new Set(arr))
+}
+
+// ---------- Phone extraction (mirrors src/phone.ts) ----------
+
+/** True if a raw matched string plausibly is a phone number. */
+function isLikelyPhone(raw: string): boolean {
+  const s = raw.trim()
+  const digits = s.replace(/\D/g, '')
+  if (digits.length < 8 || digits.length > 15) return false
+  // Decimal numbers: map coordinates, prices, ratings ("35.2931607", "10.50").
+  // The only dotted format kept is French-style pairs ("01.55.78.10.00") —
+  // anything else dotted (incl. IP addresses) is rejected.
+  if (/\d\.\d/.test(s) && !/^\d{2}(\.\d{2}){3,}$/.test(s.replace(/\s+/g, ''))) return false
+  // Year ranges and season spans ("2024-2025", "2024 – 2025", "2024/2025")
+  if (/(19|20)\d{2}\s*[-–—/]\s*(19|20)\d{2}/.test(s)) return false
+  // Dates in either order ("2026-06-10", "10/06/2026", "10.06.2026")
+  if (/^(19|20)\d{2}[-/.]\d{1,2}[-/.]\d{1,2}$/.test(s)) return false
+  if (/^\d{1,2}[-/.]\d{1,2}[-/.](19|20)\d{2}$/.test(s)) return false
+  return true
+}
+
+/**
+ * Extract validated phone candidates. `tel:` links first (when a site has
+ * one, it's the number the venue wants to be called on — near-zero false
+ * positives), then validated free-text matches. Deduped, best-first.
+ */
+function extractPhoneCandidates(html: string, text: string): string[] {
+  const fromTelLinks = [...html.matchAll(/href=["']tel:([+\d][\d\s()./-]*\d)["']/gi)]
+    .map(m => m[1])
+  const fromText = text.match(/(?:\+?\d[\d\s()./-]{6,}\d)/g) ?? []
+  const all = [...fromTelLinks, ...fromText]
+    .map(s => s.trim().replace(/\s+/g, ' '))
+    .filter(isLikelyPhone)
+  return Array.from(new Set(all))
 }
 
 // ---------- Overpass Discovery ----------

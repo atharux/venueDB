@@ -6,6 +6,7 @@
 
 import type { Venue } from './types'
 import { SEED_VENUES, SEED_VERSION } from './seed'
+import { isLikelyPhone, normalizePhone } from './phone'
 
 const LS_KEY = 'crete-nightlife-venues-v1'
 const LS_VERSION_KEY = 'crete-nightlife-seed-version'
@@ -204,6 +205,52 @@ export async function deleteDuplicateVenues(currentVenues: Venue[]) {
     venues: deduped.sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
     removed: duplicates.length,
   }
+}
+
+/**
+ * Clear phone values that fail validation (scraped junk: coordinates, year
+ * ranges, dates, prices) and normalize whitespace on the valid ones.
+ *
+ * Supabase note: the regular upsert path can't clear a column — JSON omits
+ * undefined keys, so PostgREST leaves the old value in place. Clearing
+ * requires an explicit `phone: null` PATCH per affected row.
+ */
+export async function clearInvalidPhones(currentVenues: Venue[]) {
+  const now = new Date().toISOString()
+  const toClear: Venue[] = []
+  const toNormalize: Venue[] = []
+  for (const v of currentVenues) {
+    if (!v.phone) continue
+    if (!isLikelyPhone(v.phone)) toClear.push(v)
+    else if (normalizePhone(v.phone) !== v.phone) toNormalize.push(v)
+  }
+
+  const clearedIds = new Set(toClear.map(v => v.id))
+  const normalizedIds = new Set(toNormalize.map(v => v.id))
+  const next = currentVenues.map(v => {
+    if (clearedIds.has(v.id)) return { ...v, phone: undefined, updated_at: now }
+    if (normalizedIds.has(v.id)) return { ...v, phone: normalizePhone(v.phone!), updated_at: now }
+    return v
+  })
+
+  if (storageMode === 'supabase') {
+    for (const v of toClear) {
+      await supabaseFetch(`/venues?id=eq.${encodeURIComponent(v.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ phone: null, updated_at: now }),
+      })
+    }
+    for (const v of toNormalize) {
+      await supabaseFetch(`/venues?id=eq.${encodeURIComponent(v.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ phone: normalizePhone(v.phone!), updated_at: now }),
+      })
+    }
+  } else {
+    saveLocal(next)
+  }
+
+  return { venues: next, cleared: toClear.length, normalized: toNormalize.length }
 }
 
 export function exportJson(venues: Venue[]) {
