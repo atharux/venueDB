@@ -5,8 +5,7 @@
  *   POST /scrape    { url }                           → ScrapeResult
  *   POST /search    { query }                         → { results: SearchResult[] }  (BRAVE_API_KEY)
  *   POST /places    { query }                         → { results: PlacesResult[] }  (GOOGLE_MAPS_API_KEY)
- *   POST /discover  { city|location, category|categories, country?, limit? } → { results: DiscoveredVenue[] }
- *                   (Overpass free baseline + Foursquare/Yelp free tiers when keys are set)
+ *   POST /discover  { city|location, category|categories, country?, limit? } → { results: DiscoveredVenue[] }  (Overpass/free)
  *   POST /enrich    { url, context? }                 → EnrichedVenue  (scrape + LLM)
  *   GET  /health                                      → { ok: true }
  *
@@ -20,8 +19,6 @@ export interface Env {
   BRAVE_API_KEY?: string
   OPENROUTER_API_KEY?: string
   GOOGLE_MAPS_API_KEY?: string
-  FOURSQUARE_API_KEY?: string
-  YELP_API_KEY?: string
 }
 
 interface PlacesResult {
@@ -56,11 +53,11 @@ interface SearchResult {
 }
 
 interface DiscoveredVenue {
-  // osm_id is a synthetic numeric hash for non-OSM sources (foursquare/yelp);
-  // the frontend uses it only as a stable row key.
   osm_id: number
-  osm_type: 'node' | 'way' | 'relation' | 'foursquare' | 'yelp'
-  source: 'osm' | 'foursquare' | 'yelp'
+  osm_type: 'node' | 'way' | 'relation'
+  /** Discovery backend that produced this record. Only OSM today —
+   *  Foursquare/Yelp were evaluated and rejected (no real free tier). */
+  source: 'osm'
   name: string
   lat: number
   lng: number
@@ -107,8 +104,6 @@ export default {
           hasSearch: Boolean(env.BRAVE_API_KEY),
           hasEnrich: Boolean(env.OPENROUTER_API_KEY),
           hasPlaces: Boolean(env.GOOGLE_MAPS_API_KEY),
-          hasFoursquare: Boolean(env.FOURSQUARE_API_KEY),
-          hasYelp: Boolean(env.YELP_API_KEY),
         }, 200, corsHeaders)
       }
       if (url.pathname === '/scrape' && req.method === 'POST') {
@@ -157,29 +152,7 @@ export default {
           return json({ error: 'city/location and category/categories required' }, 400, corsHeaders)
         }
         const cats = body.categories?.length ? body.categories : [body.category!]
-        const limit = body.limit ?? 200
-        const locationQuery = body.country ? `${cityName}, ${body.country}` : cityName
-
-        // OSM/Overpass is the keyless baseline. Foursquare and Yelp (free
-        // tiers, optional secrets) fill coverage gaps where OSM is thin
-        // (e.g. Dubai). Each source fails independently; results merge by
-        // normalized name so the same venue collapses into one record.
-        let osmError: Error | null = null
-        const [osm, fsq, yelp] = await Promise.all([
-          discoverVenues(cityName, cats, body.country ?? '', limit).catch(err => {
-            osmError = err instanceof Error ? err : new Error(String(err))
-            return [] as DiscoveredVenue[]
-          }),
-          env.FOURSQUARE_API_KEY
-            ? foursquareSearch(locationQuery, cats, env.FOURSQUARE_API_KEY).catch(() => [] as DiscoveredVenue[])
-            : Promise.resolve([] as DiscoveredVenue[]),
-          env.YELP_API_KEY
-            ? yelpSearch(locationQuery, env.YELP_API_KEY).catch(() => [] as DiscoveredVenue[])
-            : Promise.resolve([] as DiscoveredVenue[]),
-        ])
-        const results = mergeDiscovered([...osm, ...fsq, ...yelp], limit)
-        // Don't mask a total failure as "no venues here".
-        if (results.length === 0 && osmError) throw osmError
+        const results = await discoverVenues(cityName, cats, body.country ?? '', body.limit ?? 200)
         return json({ results }, 200, corsHeaders)
       }
       if (url.pathname === '/enrich' && req.method === 'POST') {
@@ -564,165 +537,6 @@ async function discoverVenues(
     if (out.length >= limit) break
   }
   return out
-}
-
-// ---------- Foursquare + Yelp Discovery (free tiers, optional keys) ----------
-
-/** Stable 32-bit FNV-1a hash — synthetic numeric row ids for string place ids. */
-function hashId(s: string): number {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return Math.abs(h)
-}
-
-/**
- * Foursquare Places API (free tier). One query per requested category term,
- * 50 results max per request. Docs: https://places-api.foursquare.com
- * Requires a service key set via `wrangler secret put FOURSQUARE_API_KEY`.
- */
-async function foursquareSearch(
-  near: string,
-  categories: string[],
-  apiKey: string,
-): Promise<DiscoveredVenue[]> {
-  const fields = 'fsq_place_id,name,latitude,longitude,location,tel,website,email,categories'
-  const out: DiscoveredVenue[] = []
-  const seen = new Set<string>()
-
-  for (const cat of categories) {
-    try {
-      const url =
-        `https://places-api.foursquare.com/places/search` +
-        `?query=${encodeURIComponent(cat)}&near=${encodeURIComponent(near)}&limit=50&fields=${fields}`
-      const res = await fetch(url, {
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-          'X-Places-Api-Version': '2025-06-17',
-        },
-      })
-      if (!res.ok) continue
-      const data = (await res.json()) as {
-        results?: {
-          fsq_place_id?: string
-          name?: string
-          latitude?: number
-          longitude?: number
-          location?: { address?: string; locality?: string; region?: string; postcode?: string; country?: string }
-          tel?: string
-          website?: string
-          email?: string
-          categories?: { id?: number | string; name?: string }[]
-        }[]
-      }
-      for (const p of data.results ?? []) {
-        if (!p.fsq_place_id || !p.name) continue
-        if (seen.has(p.fsq_place_id)) continue
-        seen.add(p.fsq_place_id)
-        out.push({
-          osm_id: hashId(`fsq:${p.fsq_place_id}`),
-          osm_type: 'foursquare',
-          source: 'foursquare',
-          name: p.name,
-          lat: p.latitude ?? 0,
-          lng: p.longitude ?? 0,
-          category: cat,
-          address: {
-            road: p.location?.address,
-            city: p.location?.locality,
-            country: p.location?.country,
-            postcode: p.location?.postcode,
-          },
-          website: p.website,
-          phone: p.tel,
-          email: p.email,
-          tags: { name: p.name, ...(p.categories?.[0]?.name ? { amenity: p.categories[0].name } : {}) },
-        })
-      }
-    } catch {
-      // one category failing shouldn't abort the rest
-    }
-  }
-  return out
-}
-
-/**
- * Yelp Fusion API (free tier). Single request — `nightlife` covers clubs and
- * bars, `musicvenues` adds live music. Yelp's `url` field is its own listing
- * page (an aggregator), NOT the venue website, so it is deliberately dropped;
- * name/phone/address still merge into OSM/Foursquare records.
- * Requires a key set via `wrangler secret put YELP_API_KEY`.
- */
-async function yelpSearch(location: string, apiKey: string): Promise<DiscoveredVenue[]> {
-  const url =
-    `https://api.yelp.com/v3/businesses/search` +
-    `?location=${encodeURIComponent(location)}&categories=nightlife,musicvenues&limit=50&sort_by=best_match`
-  const res = await fetch(url, {
-    headers: { Accept: 'application/json', Authorization: `Bearer ${apiKey}` },
-  })
-  if (!res.ok) {
-    throw new Error(`Yelp ${res.status}: ${await res.text().then(t => t.slice(0, 200))}`)
-  }
-  const data = (await res.json()) as {
-    businesses?: {
-      id?: string
-      name?: string
-      coordinates?: { latitude?: number; longitude?: number }
-      location?: { address1?: string; city?: string; zip_code?: string; country?: string }
-      phone?: string
-      categories?: { alias?: string; title?: string }[]
-    }[]
-  }
-  return (data.businesses ?? [])
-    .filter(b => b.id && b.name)
-    .map(b => ({
-      osm_id: hashId(`yelp:${b.id}`),
-      osm_type: 'yelp' as const,
-      source: 'yelp' as const,
-      name: b.name!,
-      lat: b.coordinates?.latitude ?? 0,
-      lng: b.coordinates?.longitude ?? 0,
-      category: b.categories?.[0]?.title?.toLowerCase() ?? 'nightclub',
-      address: {
-        road: b.location?.address1,
-        city: b.location?.city,
-        country: b.location?.country,
-        postcode: b.location?.zip_code,
-      },
-      phone: b.phone || undefined,
-      tags: { name: b.name!, ...(b.categories?.[0]?.title ? { amenity: b.categories[0].title } : {}) },
-    }))
-}
-
-/**
- * Merge venues from all sources. Dedup key is the accent-stripped, lowercased
- * name; the first-seen record (OSM first by call order) wins, and later
- * sources fill in any missing contact fields.
- */
-function mergeDiscovered(venues: DiscoveredVenue[], limit: number): DiscoveredVenue[] {
-  const byName = new Map<string, DiscoveredVenue>()
-  for (const v of venues) {
-    const key = v.name
-      .toLowerCase()
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, ' ')
-      .trim()
-    if (!key) continue
-    const existing = byName.get(key)
-    if (!existing) {
-      byName.set(key, v)
-      continue
-    }
-    existing.website ??= v.website
-    existing.phone ??= v.phone
-    existing.email ??= v.email
-    existing.opening_hours ??= v.opening_hours
-  }
-  return Array.from(byName.values()).slice(0, limit)
 }
 
 // ---------- Enrich (scrape + LLM) ----------

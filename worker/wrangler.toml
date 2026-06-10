@@ -10,9 +10,10 @@ compatibility_flags = ["nodejs_compat"]
 #   BRAVE_API_KEY        — optional, enables /search (Brave Search API, 2k/month free)
 #   OPENROUTER_API_KEY   — optional, enables LLM extraction in /enrich (free models used)
 #   GOOGLE_MAPS_API_KEY  — optional, enables /places (Google Maps Places API, needs billing)
-#   FOURSQUARE_API_KEY   — optional, adds Foursquare Places (free tier) to /discover
-#   YELP_API_KEY         — optional, adds Yelp Fusion (free tier) to /discover
 # Without secrets, /scrape and /discover still work (regex + Overpass, fully free).
+# Foursquare and Yelp were evaluated and rejected for /discover — neither has a
+# usable free tier (Yelp Fusion is paid; Foursquare Place Search is a Pro
+# endpoint, only 500 calls/month free then $15 CPM).
 
 # CORS allowlist — comma-separated origins, or "*" for any.
 # Tighten in production: "https://venue-outreach-db.pages.dev,https://athar-eventplanner.pages.dev"

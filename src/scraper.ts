@@ -145,7 +145,7 @@ export async function searchPlaces(query: string, options?: AiScraperOptions): P
 export interface OsmVenue {
   osm_id: number
   osm_type: string
-  /** Which discovery backend produced this record: 'osm' | 'foursquare' | 'yelp' */
+  /** Which discovery backend produced this record (currently always 'osm') */
   source?: string
   name: string
   lat: number
