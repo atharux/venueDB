@@ -17,9 +17,11 @@ interface Props {
    * If absent, the enrichment panel is hidden (read-only dashboard).
    */
   onUpdateVenue?: (id: string, patch: Partial<Venue>) => Promise<void> | void
+  /** Plural noun for the active entity slice — 'venues' (default) or 'festivals'. */
+  entityLabel?: string
 }
 
-export function Dashboard({ venues, onDrillDown, onUpdateVenue }: Props) {
+export function Dashboard({ venues, onDrillDown, onUpdateVenue, entityLabel = 'venues' }: Props) {
   const stats = useMemo(() => {
     const byStatus = new Map<OutreachStatus, number>()
     for (const s of STATUSES) byStatus.set(s, 0)
@@ -53,7 +55,7 @@ export function Dashboard({ venues, onDrillDown, onUpdateVenue }: Props) {
   return (
     <section className="dashboard">
       <div className="stat-row">
-        <Stat label="Total venues" value={total} />
+        <Stat label={`Total ${entityLabel}`} value={total} />
         <Stat label="Reachable" value={reachable} hint={`${pct(reachable, total)}% with a contact channel`} />
         <Stat label="Has DJs" value={stats.hasDjs} hint={`${pct(stats.hasDjs, total)}% confirmed DJ programming`} />
         <Stat label="Ready to contact" value={stats.byStatus.get('ready') ?? 0} />
@@ -61,7 +63,7 @@ export function Dashboard({ venues, onDrillDown, onUpdateVenue }: Props) {
         <Stat label="Won" value={stats.byStatus.get('won') ?? 0} tone="positive" />
       </div>
 
-      {onUpdateVenue ? <BulkEnrichPanel venues={venues} onUpdateVenue={onUpdateVenue} /> : null}
+      {onUpdateVenue ? <BulkEnrichPanel venues={venues} onUpdateVenue={onUpdateVenue} entityLabel={entityLabel} /> : null}
 
       <div className="dashboard-grid">
         <div className="card">
@@ -116,13 +118,14 @@ export function Dashboard({ venues, onDrillDown, onUpdateVenue }: Props) {
 interface BulkEnrichProps {
   venues: Venue[]
   onUpdateVenue: (id: string, patch: Partial<Venue>) => Promise<void> | void
+  entityLabel: string
 }
 
 function isIncomplete(v: Venue) {
   return !v.email || !v.instagram || !v.phone || !v.website
 }
 
-function BulkEnrichPanel({ venues, onUpdateVenue }: BulkEnrichProps) {
+function BulkEnrichPanel({ venues, onUpdateVenue, entityLabel }: BulkEnrichProps) {
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0, current: '' })
   const [summary, setSummary] = useState<{ enriched: number; errors: number; ran: number } | null>(null)
@@ -216,7 +219,7 @@ function BulkEnrichPanel({ venues, onUpdateVenue }: BulkEnrichProps) {
         <div>
           <h3>Enrich missing contacts</h3>
           <p className="muted small">
-            {incomplete.length} of {venues.length} venues are missing at least one channel
+            {incomplete.length} of {venues.length} {entityLabel} are missing at least one channel
             {' '}(website, IG, email, or phone). The scraper fetches each website and pulls
             public contacts — no fabrication.
           </p>
@@ -224,7 +227,7 @@ function BulkEnrichPanel({ venues, onUpdateVenue }: BulkEnrichProps) {
         <div className="enrich-actions">
           {!running ? (
             <button className="primary-btn" onClick={start} disabled={incomplete.length === 0}>
-              {incomplete.length === 0 ? 'Nothing to enrich' : `Enrich ${incomplete.length} venues`}
+              {incomplete.length === 0 ? 'Nothing to enrich' : `Enrich ${incomplete.length} ${entityLabel}`}
             </button>
           ) : (
             <button className="danger-btn" onClick={cancel}>

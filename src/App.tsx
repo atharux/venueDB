@@ -34,10 +34,15 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tableFilters, setTableFilters] = useState<TableFilters | undefined>(undefined)
 
+  // The dashboard tab has its own entity toggle — without it, the dashboard
+  // (and its bulk-enrich panel) could only ever see venues, never festivals.
+  const [dashEntity, setDashEntity] = useState<EntityType>('venue')
+
   // Split the dataset by entity_type so each tab gets its own slice. Same
   // table, same indexes, just a virtual partition for the UI. New rows
   // inherit the active tab's entity type via wrapping add/update.
-  const activeEntity: EntityType = tab === 'festivals' ? 'festival' : 'venue'
+  const activeEntity: EntityType =
+    tab === 'festivals' ? 'festival' : tab === 'dashboard' ? dashEntity : 'venue'
   const scopedVenues = useMemo(
     () => venues.filter(v => entityOf(v) === activeEntity),
     [venues, activeEntity],
@@ -68,7 +73,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app ${tab === 'festivals' ? 'is-festivals' : ''}`}>
+    <div className={`app ${tab === 'festivals' || (tab === 'dashboard' && dashEntity === 'festival') ? 'is-festivals' : ''}`}>
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark">VI</div>
@@ -158,7 +163,28 @@ export default function App() {
             />
           ) : null}
           {tab === 'dashboard' ? (
-            <Dashboard venues={scopedVenues} onDrillDown={drillDown} onUpdateVenue={update} />
+            <>
+              <div className="scan-filter-row" role="tablist" aria-label="Dashboard entity">
+                <button
+                  className={`chip ${dashEntity === 'venue' ? 'active' : ''}`}
+                  onClick={() => setDashEntity('venue')}
+                >
+                  Venues ({venues.filter(v => entityOf(v) === 'venue').length})
+                </button>
+                <button
+                  className={`chip ${dashEntity === 'festival' ? 'active' : ''}`}
+                  onClick={() => setDashEntity('festival')}
+                >
+                  Festivals ({venues.filter(v => entityOf(v) === 'festival').length})
+                </button>
+              </div>
+              <Dashboard
+                venues={scopedVenues}
+                onDrillDown={drillDown}
+                onUpdateVenue={update}
+                entityLabel={dashEntity === 'festival' ? 'festivals' : 'venues'}
+              />
+            </>
           ) : null}
           {tab === 'discover' ? (
             <DiscoveryPanel
