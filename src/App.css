@@ -3224,6 +3224,15 @@ details[open].discover-advanced > summary::before {
   --warn: #f59e0b;
   --err: #ff4560;
   color-scheme: dark;
+  /* Explicit color inheritance fix — without this, elements with no
+     explicit color class inherit from html/body which resolves against
+     :root vars (dark green #263027), making text invisible on dark bg. */
+  color: var(--text);
+  /* Override .app's hardcoded warm amber/green gradient layers */
+  background:
+    radial-gradient(circle at top right, rgba(214, 54, 90, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(214, 54, 90, 0.04), transparent 16%),
+    var(--bg);
 }
 
 /* Table row states — replace default green tints */
