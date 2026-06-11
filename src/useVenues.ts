@@ -17,7 +17,8 @@ function normalise(d: Partial<Venue>): Partial<Venue> {
   if (typeof out.verified_by === 'string') out.verified_by = out.verified_by.trim() || undefined
   // City: trim + title-case ("sardinia" → "Sardinia", "PORTO CERVO" → "Porto Cervo")
   if (typeof out.city === 'string') {
-    const c = out.city.trim().replace(/\b\w/g, ch => ch.toUpperCase())
+    // toLowerCase first so MALIA→Malia, KrakóW→Kraków, ALL CAPS→Title Case
+    const c = out.city.trim().toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase())
     out.city = (c || out.city) as City
   }
   // Email: trim + lowercase

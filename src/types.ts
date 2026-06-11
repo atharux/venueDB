@@ -4,18 +4,20 @@
 export const CITIES = [
   // Germany
   'Berlin', 'Hamburg', 'Munich', 'Cologne', 'Frankfurt',
+  'Leipzig', 'Stuttgart', 'Mannheim', 'Nuremberg', 'Dortmund',
   // France
-  'Paris', 'Lyon', 'Marseille', 'Nice',
+  'Paris', 'Lyon', 'Marseille', 'Nice', 'Toulouse', 'Bordeaux', 'Nantes', 'Lille', 'Strasbourg', 'Rennes',
   // UK
   'London', 'Manchester', 'Bristol', 'Glasgow',
+  'Edinburgh', 'Leeds', 'Liverpool', 'Birmingham', 'Brighton', 'Newcastle', 'Sheffield', 'Belfast',
   // Netherlands
-  'Amsterdam', 'Rotterdam', 'Utrecht',
+  'Amsterdam', 'Rotterdam', 'Utrecht', 'Groningen', 'Eindhoven', 'Tilburg',
   // UAE
   'Dubai', 'Abu Dhabi',
   // Spain
-  'Barcelona', 'Madrid', 'Ibiza',
+  'Barcelona', 'Madrid', 'Ibiza', 'Valencia', 'Seville', 'Bilbao', 'Tenerife',
   // Italy
-  'Milan', 'Rome', 'Naples', 'Florence',
+  'Milan', 'Rome', 'Naples', 'Florence', 'Bologna', 'Turin',
   // Sardinia
   'Sardinia', 'Cagliari', 'Olbia', 'Porto Cervo', 'Sassari', 'Alghero', 'La Maddalena',
   // Portugal
@@ -23,6 +25,40 @@ export const CITIES = [
   // Greece — Crete
   'Chania', 'Heraklion', 'Hersonissos', 'Malia', 'Rethymno',
   'Agios Nikolaos', 'Elounda', 'Makrigialos', 'Ammoudara',
+  // Greece — mainland / islands
+  'Athens', 'Thessaloniki', 'Mykonos',
+  // Czech Republic
+  'Prague',
+  // Austria
+  'Vienna', 'Graz',
+  // Scandinavia
+  'Copenhagen', 'Stockholm', 'Gothenburg', 'Oslo', 'Bergen', 'Helsinki', 'Aarhus',
+  // Switzerland
+  'Zurich', 'Geneva', 'Bern',
+  // Belgium
+  'Brussels', 'Antwerp', 'Ghent',
+  // Poland
+  'Warsaw', 'Kraków', 'Gdańsk', 'Wrocław', 'Łódź', 'Szczecin',
+  // Hungary
+  'Budapest',
+  // Romania
+  'Bucharest', 'Cluj-Napoca',
+  // Bulgaria
+  'Sofia',
+  // Serbia
+  'Belgrade',
+  // Croatia
+  'Zagreb', 'Split', 'Dubrovnik',
+  // Slovenia
+  'Ljubljana',
+  // Baltics
+  'Riga', 'Tallinn', 'Vilnius',
+  // Ireland
+  'Dublin',
+  // Cyprus
+  'Ayia Napa',
+  // Malta
+  'Valletta',
   'Other',
 ] as const
 export type City = (typeof CITIES)[number] | (string & {})
@@ -91,6 +127,239 @@ export const CITY_TO_REGION: Record<string, string> = {
   // Portugal
   Lisbon: 'Portugal',
   Porto: 'Portugal',
+  'Lisbon (Graça)': 'Portugal',
+  'Lisbon (GraçA)': 'Portugal',
+  'Lisbon (Waterfront)': 'Portugal',
+  // Czech Republic
+  Prague: 'Czech Republic',
+  // Austria
+  Vienna: 'Austria',
+  Graz: 'Austria',
+  'Vienna (Danube Canal)': 'Austria',
+  'Graz (Cave)': 'Austria',
+  'Graz (Limestone Cave)': 'Austria',
+  // Scandinavia
+  Copenhagen: 'Scandinavia',
+  Aarhus: 'Scandinavia',
+  Stockholm: 'Scandinavia',
+  Gothenburg: 'Scandinavia',
+  'Malmö': 'Scandinavia',
+  Oslo: 'Scandinavia',
+  Bergen: 'Scandinavia',
+  Helsinki: 'Scandinavia',
+  Tampere: 'Scandinavia',
+  Oulu: 'Scandinavia',
+  'Stockholm (Under Bridges)': 'Scandinavia',
+  'Stockholm (Waterfront)': 'Scandinavia',
+  'Stockholm (Former Slaughterhouse)': 'Scandinavia',
+  'Oslo (Akerselva)': 'Scandinavia',
+  'Oslo (Akerselva River)': 'Scandinavia',
+  // Switzerland
+  Zurich: 'Switzerland',
+  Bern: 'Switzerland',
+  Geneva: 'Switzerland',
+  Fribourg: 'Switzerland',
+  'Bern (Reitschule)': 'Switzerland',
+  'Geneva (Carouge)': 'Switzerland',
+  // Belgium
+  Antwerp: 'Belgium',
+  Ghent: 'Belgium',
+  Brussels: 'Belgium',
+  'Sint-Niklaas': 'Belgium',
+  'Brussels (Watermael-Boitsfort)': 'Belgium',
+  // Luxembourg
+  'Luxembourg City': 'Luxembourg',
+  // Netherlands (extended)
+  Groningen: 'Netherlands',
+  Nijmegen: 'Netherlands',
+  Leiden: 'Netherlands',
+  Zwolle: 'Netherlands',
+  Eindhoven: 'Netherlands',
+  Tilburg: 'Netherlands',
+  'Amsterdam Noord': 'Netherlands',
+  'Amsterdam (West)': 'Netherlands',
+  'Amsterdam (Former Church)': 'Netherlands',
+  'Amsterdam (Sloterpark)': 'Netherlands',
+  'Amsterdam (Westergasfabriek)': 'Netherlands',
+  'Amsterdam (City Centre)': 'Netherlands',
+  'Amsterdam (North)': 'Netherlands',
+  // Germany (extended)
+  Leipzig: 'Germany',
+  Stuttgart: 'Germany',
+  Mannheim: 'Germany',
+  Wuppertal: 'Germany',
+  Wiesbaden: 'Germany',
+  Bochum: 'Germany',
+  Oberhausen: 'Germany',
+  Rostock: 'Germany',
+  Heidelberg: 'Germany',
+  Darmstadt: 'Germany',
+  Mainz: 'Germany',
+  Wilhelmshaven: 'Germany',
+  Nuremberg: 'Germany',
+  Duisburg: 'Germany',
+  Karlsruhe: 'Germany',
+  'Offenbach (Frankfurt)': 'Germany',
+  'Offenbach (Frankfurt Area)': 'Germany',
+  'Berlin Moabit': 'Germany',
+  // Poland
+  Warsaw: 'Poland',
+  'Kraków': 'Poland',
+  'Gdańsk': 'Poland',
+  'Wrocław': 'Poland',
+  'Łódź': 'Poland',
+  'łódź': 'Poland',          // lowercase form after normalise (ł not matched by \b\w)
+  'KrakóW': 'Poland',        // raw DB value — fixed by normalise-all
+  'GdańSk': 'Poland',
+  'WrocłAw': 'Poland',
+  'ŁóDź': 'Poland',
+  Szczecin: 'Poland',
+  'Warsaw (Vistula River)': 'Poland',
+  // Hungary
+  Budapest: 'Hungary',
+  'Budapest (In Ruin Bar)': 'Hungary',
+  'Budapest (Danube)': 'Hungary',
+  'Budapest (In Corvin Club)': 'Hungary',
+  'Budapest (Rooftop)': 'Hungary',
+  // Romania
+  Bucharest: 'Romania',
+  'Cluj-Napoca': 'Romania',
+  'Bucharest Area': 'Romania',
+  // Bulgaria
+  Sofia: 'Bulgaria',
+  'Sunny Beach': 'Bulgaria',
+  // Slovakia
+  Bratislava: 'Slovakia',
+  // Serbia
+  Belgrade: 'Serbia',
+  'Belgrade (Former Slaughterhouse)': 'Serbia',
+  'Belgrade (Floating Club)': 'Serbia',
+  'Belgrade (Kalemegdan Fortress)': 'Serbia',
+  'Belgrade (Floating)': 'Serbia',
+  // Croatia
+  Zagreb: 'Croatia',
+  Split: 'Croatia',
+  Dubrovnik: 'Croatia',
+  Hvar: 'Croatia',
+  'Hvar (Island)': 'Croatia',
+  'Dubrovnik (Fortress)': 'Croatia',
+  'Zrce Beach, Pag Island': 'Croatia',
+  'Tisno, Dalmatian Coast': 'Croatia',
+  'Near Tisno': 'Croatia',
+  // Slovenia
+  Ljubljana: 'Slovenia',
+  // Greece (mainland + islands, not Crete)
+  Athens: 'Greece',
+  Mykonos: 'Greece',
+  Thessaloniki: 'Greece',
+  'Athens (Faliro Waterfront)': 'Greece',
+  'Mykonos (Paraga Beach)': 'Greece',
+  // Cyprus
+  'Ayia Napa': 'Cyprus',
+  'Ayia Napa (Beach)': 'Cyprus',
+  // Malta
+  Paceville: 'Malta',
+  Valletta: 'Malta',
+  "St Julian's": 'Malta',
+  "Paceville, St Julian's": 'Malta',
+  'Valletta Waterfront': 'Malta',
+  // Ireland
+  Dublin: 'Ireland',
+  'Dublin (Temple Bar)': 'Ireland',
+  // Baltics
+  Tallinn: 'Baltics',
+  Vilnius: 'Baltics',
+  Riga: 'Baltics',
+  'Riga (Elizabetes Iela)': 'Baltics',
+  'Riga (Andrejosta District)': 'Baltics',
+  // UK (extended)
+  Brighton: 'UK',
+  Sheffield: 'UK',
+  Leeds: 'UK',
+  Liverpool: 'UK',
+  Edinburgh: 'UK',
+  Newcastle: 'UK',
+  Birmingham: 'UK',
+  Nottingham: 'UK',
+  Belfast: 'UK',
+  Lincoln: 'UK',
+  'London (Brixton)': 'UK',
+  'London (Hackney Wick)': 'UK',
+  'London (Bermondsey)': 'UK',
+  'London (Shoreditch)': 'UK',
+  'London (Elephant & Castle)': 'UK',
+  'London (Farringdon)': 'UK',
+  'London (Bethnal Green)': 'UK',
+  'London (Hackney)': 'UK',
+  'London (Canning Town)': 'UK',
+  'London (Docklands)': 'UK',
+  'London (Dalston)': 'UK',
+  'London (Peckham)': 'UK',
+  'London (Embankment)': 'UK',
+  'London (Camden)': 'UK',
+  "London (King's Cross)": 'UK',
+  'London (Tottenham)': 'UK',
+  'London (Greenwich)': 'UK',
+  'London (Whitechapel)': 'UK',
+  'Manchester (Salford)': 'UK',
+  'Manchester (Whitworth St West)': 'UK',
+  // Spain (extended)
+  Valencia: 'Spain',
+  Seville: 'Spain',
+  Bilbao: 'Spain',
+  Zaragoza: 'Spain',
+  Tenerife: 'Spain',
+  'Magaluf, Mallorca': 'Spain',
+  'A Coruña, Galicia': 'Spain',
+  'A CoruñA, Galicia': 'Spain',   // raw DB value — fixed by normalise-all
+  'San Antonio': 'Spain',
+  "Playa D'En Bossa": 'Spain',
+  'Ibiza Town': 'Spain',
+  'San Rafael': 'Spain',
+  'Cap Martinet': 'Spain',
+  'Ibiza Town Marina': 'Spain',
+  'Ibiza (Nov-Apr)': 'Spain',
+  'Near San Antonio': 'Spain',
+  'San Antonio Hills': 'Spain',
+  'San José Hillside': 'Spain',
+  'San Carlos': 'Spain',
+  "Playa D'En Bossa Strip": 'Spain',
+  'DC-10': 'Spain',
+  'Near Airport': 'Spain',
+  'Barcelona (Poble Espanyol)': 'Spain',
+  'Barcelona (Poblenou)': 'Spain',
+  'Barcelona (Las Ramblas)': 'Spain',
+  'Barcelona (Beachfront)': 'Spain',
+  'Madrid (Humanes)': 'Spain',
+  // France (extended)
+  Toulouse: 'France',
+  Bordeaux: 'France',
+  Nantes: 'France',
+  Rennes: 'France',
+  Lille: 'France',
+  Strasbourg: 'France',
+  'Toulouse (Ramonville)': 'France',
+  'Bordeaux (Cenon)': 'France',
+  'Bordeaux (Mérignac)': 'France',
+  'Bordeaux (MéRignac)': 'France',  // raw DB value — fixed by normalise-all
+  'Bordeaux (Riverboat)': 'France',
+  'Saint-Ouen (Paris Nord)': 'France',
+  'Paris (La Villette)': 'France',
+  'Paris (St-Ouen)': 'France',
+  'Paris (Near Gare De Lyon)': 'France',
+  'Paris (Pantin)': 'France',
+  'Paris (Boat/Seine)': 'France',
+  'Paris (Former Gas Station)': 'France',
+  'Paris (Seine Riverside)': 'France',
+  'Paris (Parc De La Villette)': 'France',
+  'Marseille (Friche La Belle De Mai)': 'France',
+  // Italy (extended)
+  Bologna: 'Italy',
+  Turin: 'Italy',
+  Rimini: 'Italy',
+  'Rimini (Adriatic)': 'Italy',
+  'Riccione (Adriatic Riviera)': 'Italy',
+  'Milano Marittima (Ravenna)': 'Italy',
 }
 
 /** Distinct regions in display order. "Other" is appended for unknown cities. */
