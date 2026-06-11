@@ -414,6 +414,26 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
             />
           </Field>
         </div>
+        <div className="verified-row">
+          {(() => {
+            const vs = verifiedStatus(venue)
+            return (
+              <span className={`verified-badge is-${vs}`}>
+                {vs === 'verified'
+                  ? `✓ Verified ${venue.last_verified!.slice(0, 10)}`
+                  : vs === 'stale'
+                    ? `⚠ Stale — last verified ${venue.last_verified!.slice(0, 10)}`
+                    : 'Unverified — data accuracy unknown'}
+              </span>
+            )
+          })()}
+          <button
+            className="verify-btn"
+            onClick={() => set('last_verified', new Date().toISOString())}
+          >
+            Mark as verified
+          </button>
+        </div>
       </section>
 
       <section className="detail-section meta">
@@ -443,6 +463,12 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
       </section>
     </aside>
   )
+}
+
+function verifiedStatus(v: Venue): 'verified' | 'stale' | 'unverified' {
+  if (!v.last_verified) return 'unverified'
+  const days = (Date.now() - new Date(v.last_verified).getTime()) / 86400000
+  return days <= 90 ? 'verified' : 'stale'
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

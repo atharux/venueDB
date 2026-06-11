@@ -18,6 +18,13 @@ interface Props {
 }
 
 type SortKey = 'name' | 'city' | 'region' | 'category' | 'status' | 'luxury' | 'updated'
+type VerifiedFilter = '' | 'unverified' | 'stale' | 'verified'
+
+function verifiedStatus(v: Venue): 'verified' | 'stale' | 'unverified' {
+  if (!v.last_verified) return 'unverified'
+  const days = (Date.now() - new Date(v.last_verified).getTime()) / 86400000
+  return days <= 90 ? 'verified' : 'stale'
+}
 const PINNED_COLUMNS_KEY = 'venue-table-pinned-columns-v1'
 
 // Built-in togglable contact columns. Each has a render() that returns a
@@ -120,6 +127,20 @@ const BUILTIN_COLUMNS: BuiltInColumn[] = [
     render: v =>
       v.genre ? <span>{v.genre}</span> : <span className="cell-empty">—</span>,
   },
+  {
+    key: '__verified',
+    label: 'Verified',
+    render: v => {
+      const s = verifiedStatus(v)
+      if (s === 'unverified') return <span className="verified-badge is-unverified">—</span>
+      const date = v.last_verified!.slice(0, 10)
+      return (
+        <span className={`verified-badge is-${s}`}>
+          {s === 'verified' ? `✓ ${date}` : `⚠ ${date}`}
+        </span>
+      )
+    },
+  },
 ]
 
 const BUILTIN_BY_KEY = new Map(BUILTIN_COLUMNS.map(c => [c.key, c]))
@@ -132,6 +153,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
   const [statusFilter, setStatusFilter] = useState<OutreachStatus | ''>(initialFilters?.status ?? '')
   const [tagFilter, setTagFilter] = useState<Tag | ''>(initialFilters?.tag ?? '')
   const [hasContactOnly, setHasContactOnly] = useState(false)
+  const [verifiedFilter, setVerifiedFilter] = useState<VerifiedFilter>('')
   const [sortKey, setSortKey] = useState<SortKey>('updated')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [pinnedColumns, setPinnedColumns] = useState<string[]>(() => loadPinnedColumns())
@@ -196,6 +218,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
       if (statusFilter && v.status !== statusFilter) return false
       if (tagFilter && !v.tags.includes(tagFilter)) return false
       if (hasContactOnly && !v.email && !v.instagram && !v.phone) return false
+      if (verifiedFilter && verifiedStatus(v) !== verifiedFilter) return false
       if (q) {
         const hay = [
           v.name,
@@ -245,7 +268,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
       }
     })
     return out
-  }, [venues, query, cityFilter, regionFilter, categoryFilter, statusFilter, tagFilter, hasContactOnly, sortKey, sortDir, recentlyAddedIds])
+  }, [venues, query, cityFilter, regionFilter, categoryFilter, statusFilter, tagFilter, hasContactOnly, verifiedFilter, sortKey, sortDir, recentlyAddedIds])
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -318,6 +341,16 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
             <option key={t} value={t}>{t}</option>
           ))}
         </select>
+        <select
+          className={verifiedFilter ? 'filter-on' : ''}
+          value={verifiedFilter}
+          onChange={e => setVerifiedFilter(e.target.value as VerifiedFilter)}
+        >
+          <option value="">All data states</option>
+          <option value="unverified">Unverified</option>
+          <option value="stale">Stale (&gt;90 days)</option>
+          <option value="verified">Verified</option>
+        </select>
         <label className={`toggle ${hasContactOnly ? 'filter-on' : ''}`}>
           <input
             type="checkbox"
@@ -385,6 +418,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
             ...(statusFilter   ? [{ label: `Status: ${STATUS_LABEL[statusFilter]}`,        clear: () => setStatusFilter('') }] : []),
             ...(tagFilter      ? [{ label: `Tag: ${tagFilter}`,                            clear: () => setTagFilter('') }] : []),
             ...(hasContactOnly ? [{ label: 'Reachable only',                               clear: () => setHasContactOnly(false) }] : []),
+            ...(verifiedFilter ? [{ label: `Data: ${verifiedFilter}`,                      clear: () => setVerifiedFilter('') }] : []),
           ]
           if (chips.length === 0) return null
           return (
@@ -400,7 +434,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
                   onClick={() => {
                     setQuery(''); setCityFilter(''); setRegionFilter('')
                     setCategoryFilter(''); setStatusFilter(''); setTagFilter('')
-                    setHasContactOnly(false)
+                    setHasContactOnly(false); setVerifiedFilter('')
                   }}
                 >
                   Clear all

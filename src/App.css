@@ -3111,6 +3111,62 @@ details[open].discover-advanced > summary::before {
   color: var(--err);
 }
 
+/* ── Verification status (VenueDetail + VenueTable) ───────── */
+.verified-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.verified-badge.is-verified {
+  color: #22c55e;
+  border-color: rgba(34,197,94,0.35);
+  background: rgba(34,197,94,0.08);
+}
+
+.verified-badge.is-stale {
+  color: #f59e0b;
+  border-color: rgba(245,158,11,0.35);
+  background: rgba(245,158,11,0.08);
+}
+
+.verified-badge.is-unverified {
+  color: var(--text-muted);
+  border-color: var(--border);
+  background: transparent;
+}
+
+.verify-btn {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.verify-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
 /* =========================================================
    USABILITY SIGNIFIERS — walkthrough audit fixes
    ========================================================= */

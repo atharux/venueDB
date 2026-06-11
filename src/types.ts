@@ -221,6 +221,7 @@ export interface Venue {
   tourist_area: boolean
   notes?: string
   last_contacted?: string // ISO date
+  last_verified?: string  // ISO date — when a human last confirmed this record is accurate
   status: OutreachStatus
   tags: Tag[]
   source?: string // where this venue was discovered
