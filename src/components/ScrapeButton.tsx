@@ -29,10 +29,10 @@ export function ScrapeButton({ url, onResult }: Props) {
     return (
       <button
         className="scrape-btn disabled"
-        title="Add VITE_SCRAPER_URL to .env to enable. See DEPLOY.md."
+        title="Scraper is offline. Run locally or set VITE_SCRAPER_URL to enable contact extraction."
         disabled
       >
-        Scrape (offline)
+        Find contacts (offline)
       </button>
     )
   }
@@ -43,9 +43,9 @@ export function ScrapeButton({ url, onResult }: Props) {
         className="scrape-btn"
         onClick={handle}
         disabled={!url || busy}
-        title={url ? `Fetch ${url} and extract contacts` : 'Add a website URL first'}
+        title={url ? `Extract email, Instagram, and phone from ${url}` : 'Add a website URL above first, then click to extract contacts'}
       >
-        {busy ? 'Scraping…' : 'Scrape website'}
+        {busy ? 'Extracting…' : 'Find contacts'}
       </button>
       {error ? <div className="scrape-error">{error}</div> : null}
     </div>

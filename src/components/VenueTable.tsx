@@ -360,6 +360,25 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
         <div className="results-count">
           {filtered.length} of {venues.length}
         </div>
+        {(cityFilter || regionFilter || categoryFilter || statusFilter || tagFilter || hasContactOnly || query) ? (
+          <div className="filters-active-bar">
+            <span className="filters-active-label">Filters active</span>
+            <button
+              className="link-btn filters-clear-btn"
+              onClick={() => {
+                setQuery('')
+                setCityFilter('')
+                setRegionFilter('')
+                setCategoryFilter('')
+                setStatusFilter('')
+                setTagFilter('')
+                setHasContactOnly(false)
+              }}
+            >
+              Clear all ×
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="table-wrap">

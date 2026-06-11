@@ -4,6 +4,8 @@ import type { Venue, Tag } from '../types'
 import { CITIES, CATEGORIES, STATUSES, STATUS_LABEL, TAGS } from '../types'
 import { facebookUrl, instagramUrl, websiteUrl } from '../outreach'
 import { ScrapeButton } from './ScrapeButton'
+import { enrichLead, scraperEnabled } from '../scraper'
+import { loadAiSettings } from '../aiSettings'
 
 interface Props {
   venue: Venue
@@ -14,6 +16,43 @@ interface Props {
 
 export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
   const [showRawJson, setShowRawJson] = useState(false)
+  const [enriching, setEnriching] = useState(false)
+  const [enrichNote, setEnrichNote] = useState<string | null>(null)
+
+  const handleEnrich = async () => {
+    setEnriching(true)
+    setEnrichNote(null)
+    try {
+      const result = await enrichLead(
+        {
+          name: venue.name,
+          city: venue.city,
+          website: venue.website,
+          instagram: venue.instagram,
+          email: venue.email,
+          phone: venue.phone,
+          notes: venue.notes,
+        },
+        loadAiSettings(),
+      )
+      const patch: Partial<Venue> = {}
+      if (!venue.website && result.website) patch.website = result.website
+      if (!venue.instagram && result.instagram) patch.instagram = result.instagram
+      if (!venue.email && result.email) patch.email = result.email
+      if (!venue.phone && result.phone) patch.phone = result.phone
+
+      if (Object.keys(patch).length > 0) {
+        onUpdate(venue.id, patch)
+        setEnrichNote(`Found: ${Object.keys(patch).join(', ')}`)
+      } else {
+        setEnrichNote('Nothing new found')
+      }
+    } catch (err) {
+      setEnrichNote(`Error: ${err instanceof Error ? err.message.slice(0, 80) : String(err)}`)
+    } finally {
+      setEnriching(false)
+    }
+  }
 
   const set = <K extends keyof Venue>(k: K, val: Venue[K]) => onUpdate(venue.id, { [k]: val } as Partial<Venue>)
 
@@ -42,8 +81,24 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
           </div>
           <div className="detail-chip-row">
             <span className={`status status-${venue.status}`}>{STATUS_LABEL[venue.status]}</span>
-            <span className="detail-chip">Intel {intelScore}</span>
-            <span className="detail-chip">{readinessLabel}</span>
+            <span
+              className="detail-chip"
+              title={`Intel score: contacts found (×25) + operational signals (×10) + luxury score (×4). Max 100. This venue has ${channelCount} contact channels and ${signalCount} signals.`}
+            >
+              Intel {intelScore}
+            </span>
+            <span
+              className="detail-chip"
+              title={
+                readinessLabel === 'Research'
+                  ? 'Research — fewer than 2 contact channels found. Use Enrich or add contact details manually.'
+                  : readinessLabel === 'Qualify'
+                    ? 'Qualify — contact channels exist. Review and confirm this is a good Hydrat3 prospect before reaching out.'
+                    : 'Engage — status shows active outreach. Use the Outreach panel above to send a message or log contact.'
+              }
+            >
+              {readinessLabel}
+            </span>
           </div>
         </div>
         <button className="icon-btn" onClick={onClose} aria-label="Close">
@@ -107,6 +162,21 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
             <a className="detail-action" href={`tel:${venue.phone}`}>
               Call
             </a>
+          ) : null}
+        </div>
+        <div className="detail-enrich-row">
+          <button
+            className="detail-enrich-btn"
+            onClick={() => void handleEnrich()}
+            disabled={enriching || !scraperEnabled}
+            title={scraperEnabled ? 'Search the web for this venue\'s website, then extract email, Instagram, and phone. Only fills in missing fields — never overwrites existing data.' : 'Scraper is offline. Run locally or set VITE_SCRAPER_URL to enable.'}
+          >
+            {enriching ? 'Finding contacts…' : 'Find missing contacts'}
+          </button>
+          {enrichNote ? (
+            <span className={`detail-enrich-note ${enrichNote.startsWith('Error') ? 'is-error' : enrichNote.startsWith('Nothing') ? 'is-neutral' : 'is-ok'}`}>
+              {enrichNote}
+            </span>
           ) : null}
         </div>
       </section>

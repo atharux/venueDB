@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useVenues } from './useVenues'
 import { Dashboard } from './components/Dashboard'
 import { VenueTable } from './components/VenueTable'
@@ -7,6 +7,12 @@ import { OutreachPanel } from './components/OutreachPanel'
 import { DiscoveryPanel } from './components/DiscoveryPanel'
 import { MapView } from './components/MapView'
 import { ScraperStatusBadge } from './components/ScraperStatusBadge'
+import { BulkEnrichPanel } from './components/BulkEnrichPanel'
+import { PricingModal } from './components/PricingModal'
+import { MigrationGuide } from './components/MigrationGuide'
+import { SettingsModal, loadBrandTheme } from './components/SettingsModal'
+import type { BrandTheme } from './components/SettingsModal'
+import { AboutModal } from './components/AboutModal'
 import { exportJson, exportCsv, resetLocalToSeed } from './storage'
 import { scraperEnabled } from './scraper'
 import type { City, Category, OutreachStatus, Tag, Venue } from './types'
@@ -33,6 +39,13 @@ export default function App() {
   const [tab, setTab] = useState<TabId>('venues')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tableFilters, setTableFilters] = useState<TableFilters | undefined>(undefined)
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  const [pricingOpen, setPricingOpen] = useState(false)
+  const [migrationOpen, setMigrationOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
+  const [brand, setBrand] = useState<BrandTheme>(loadBrandTheme)
 
   // The dashboard tab has its own entity toggle — without it, the dashboard
   // (and its bulk-enrich panel) could only ever see venues, never festivals.
@@ -72,8 +85,20 @@ export default function App() {
     setTab(activeEntity === 'festival' ? 'festivals' : 'venues')
   }
 
+  // Close actions dropdown on outside click
+  useEffect(() => {
+    if (!actionsOpen) return
+    const handler = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
+        setActionsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [actionsOpen])
+
   return (
-    <div className={`app ${tab === 'festivals' || (tab === 'dashboard' && dashEntity === 'festival') ? 'is-festivals' : ''}`}>
+    <div className={`app ${tab === 'festivals' || (tab === 'dashboard' && dashEntity === 'festival') ? 'is-festivals' : ''} ${brand === 'hydrat3' ? 'brand-hydrat3' : ''}`}>
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark">VI</div>
@@ -87,86 +112,144 @@ export default function App() {
             <div className="brand-sub">Scout · Qualify · Contact · Convert</div>
           </div>
         </div>
-        <nav className="tabs">
-          <button
-            className={tab === 'venues' ? 'active' : ''}
-            onClick={() => { setTab('venues'); setTableFilters(undefined) }}
-          >
-            Venues <span className="count">{venues.filter(v => entityOf(v) === 'venue').length}</span>
-          </button>
-          <button
-            className={`tab-festivals ${tab === 'festivals' ? 'active' : ''}`}
-            onClick={() => { setTab('festivals'); setTableFilters(undefined) }}
-          >
-            Festivals <span className="count">{venues.filter(v => entityOf(v) === 'festival').length}</span>
-          </button>
-          <button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}>
-            Dashboard
-          </button>
-          <button className={tab === 'discover' ? 'active' : ''} onClick={() => setTab('discover')}>
-            Discover {scraperEnabled ? null : <span className="badge-offline">offline</span>}
-          </button>
-          <button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>
-            🗺 Map
-          </button>
+
+        <nav className="tabs" aria-label="Primary navigation">
+          {/* DATA group */}
+          <div className="tab-group">
+            <span className="tab-group-label">Data</span>
+            <button
+              className={tab === 'venues' ? 'active' : ''}
+              onClick={() => { setTab('venues'); setTableFilters(undefined) }}
+            >
+              Venues <span className="count">{venues.filter(v => entityOf(v) === 'venue').length}</span>
+            </button>
+            <button
+              className={`tab-festivals ${tab === 'festivals' ? 'active' : ''}`}
+              onClick={() => { setTab('festivals'); setTableFilters(undefined) }}
+            >
+              Festivals <span className="count">{venues.filter(v => entityOf(v) === 'festival').length}</span>
+            </button>
+          </div>
+
+          <div className="tab-group-sep" aria-hidden="true" />
+
+          {/* INSIGHTS group */}
+          <div className="tab-group">
+            <span className="tab-group-label">Insights</span>
+            <button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}>
+              Dashboard
+            </button>
+            <button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>
+              🗺 Map
+            </button>
+          </div>
+
+          <div className="tab-group-sep" aria-hidden="true" />
+
+          {/* TOOLS group */}
+          <div className="tab-group">
+            <span className="tab-group-label">Tools</span>
+            <button className={tab === 'discover' ? 'active' : ''} onClick={() => setTab('discover')}>
+              Discover {scraperEnabled ? null : <span className="badge-offline">offline</span>}
+            </button>
+          </div>
         </nav>
+
         <div className="header-actions">
-          <span className={`mode-badge mode-${storageMode}`} title={`Storage: ${storageMode}`}>
+          <span
+            className={`mode-badge mode-${storageMode}`}
+            title={
+              storageMode === 'supabase'
+                ? 'Syncing to Supabase — data is shared across devices and users.'
+                : 'Data is stored in this browser only. Open Migration guide (footer) to move to Supabase for cloud sync and team access.'
+            }
+          >
             {storageMode === 'supabase' ? 'Supabase' : 'localStorage'}
           </span>
           <ScraperStatusBadge />
-          <button className="link-btn" onClick={() => exportCsv(venues)} title="Download all venues as CSV">
-            ⬇ Download CSV
-          </button>
-          <button className="link-btn" onClick={() => exportJson(venues)} title="Download all venues as JSON">
-            ⬇ Download JSON
-          </button>
           <button
-            className="link-btn"
-            onClick={() => {
-              if (storageMode === 'localStorage') {
-                if (confirm('Reset local data and restore the default seed roster?')) {
-                  resetLocalToSeed()
-                  void restoreSeed().then(() => window.location.reload())
-                }
-                return
-              }
-
-              if (confirm('Restore the default seed roster into the current database? Existing records will be kept.')) {
-                void restoreSeed()
-              }
-            }}
+            className="icon-btn"
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+            aria-label="Open settings"
           >
-            Restore seed roster
+            ⚙
           </button>
-          <button
-            className="link-btn"
-            onClick={() => {
-              if (confirm('Delete duplicate venues and keep the strongest record for each name and city?')) {
-                void cleanupDuplicates().then(removed => {
-                  alert(removed > 0 ? `Removed ${removed} duplicate venues.` : 'No duplicates found.')
-                })
-              }
-            }}
-          >
-            Delete duplicates
-          </button>
-          <button
-            className="link-btn"
-            onClick={() => {
-              if (confirm('Clear phone values that are not real phone numbers (scraped coordinates, dates, year ranges)? Valid numbers are kept.')) {
-                void cleanupPhones().then(({ cleared, normalized }) => {
-                  alert(
-                    cleared > 0 || normalized > 0
-                      ? `Cleared ${cleared} invalid phone${cleared !== 1 ? 's' : ''}${normalized > 0 ? `, normalized ${normalized}` : ''}.`
-                      : 'All stored phone numbers look valid.',
-                  )
-                })
-              }
-            }}
-          >
-            Clean phone numbers
-          </button>
+          <div className="actions-menu" ref={actionsRef}>
+            <button
+              className={`actions-trigger ${actionsOpen ? 'is-open' : ''}`}
+              onClick={() => setActionsOpen(o => !o)}
+              aria-expanded={actionsOpen}
+              aria-haspopup="menu"
+            >
+              Actions <span className="actions-caret">{actionsOpen ? '▲' : '▾'}</span>
+            </button>
+            {actionsOpen && (
+              <div className="actions-dropdown" role="menu">
+                <button
+                  role="menuitem"
+                  onClick={() => { exportCsv(venues); setActionsOpen(false) }}
+                >
+                  ⬇ Download CSV
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => { exportJson(venues); setActionsOpen(false) }}
+                >
+                  ⬇ Download JSON
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setActionsOpen(false)
+                    if (storageMode === 'localStorage') {
+                      if (confirm('Reset local data and restore the default seed roster?')) {
+                        resetLocalToSeed()
+                        void restoreSeed().then(() => window.location.reload())
+                      }
+                      return
+                    }
+                    if (confirm('Restore the default seed roster into the current database? Existing records will be kept.')) {
+                      void restoreSeed()
+                    }
+                  }}
+                >
+                  Restore seed roster
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setActionsOpen(false)
+                    if (confirm('Delete duplicate venues and keep the strongest record for each name and city?')) {
+                      void cleanupDuplicates().then(removed => {
+                        alert(removed > 0 ? `Removed ${removed} duplicate venues.` : 'No duplicates found.')
+                      })
+                    }
+                  }}
+                >
+                  Delete duplicates
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setActionsOpen(false)
+                    if (confirm('Clear phone values that are not real phone numbers (scraped coordinates, dates, year ranges)? Valid numbers are kept.')) {
+                      void cleanupPhones().then(({ cleared, normalized }) => {
+                        alert(
+                          cleared > 0 || normalized > 0
+                            ? `Cleared ${cleared} invalid phone${cleared !== 1 ? 's' : ''}${normalized > 0 ? `, normalized ${normalized}` : ''}.`
+                            : 'All stored phone numbers look valid.',
+                        )
+                      })
+                    }
+                  }}
+                >
+                  Clean phone numbers
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -176,12 +259,20 @@ export default function App() {
       <main className={`app-main ${selected ? 'with-detail' : ''}`}>
         <div className="main-pane">
           {tab === 'venues' || tab === 'festivals' ? (
-            <VenueTable
-              venues={scopedVenues}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              initialFilters={tableFilters}
-            />
+            <>
+              <BulkEnrichPanel
+                venues={scopedVenues}
+                onUpdateVenue={update}
+                entityLabel={tab === 'festivals' ? 'festivals' : 'venues'}
+                defaultCollapsed
+              />
+              <VenueTable
+                venues={scopedVenues}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                initialFilters={tableFilters}
+              />
+            </>
           ) : null}
           {tab === 'dashboard' ? (
             <>
@@ -227,6 +318,16 @@ export default function App() {
 
         {selected ? (
           <div className="detail-pane">
+            <div className="detail-close-bar">
+              <span className="detail-close-name">{selected.name}</span>
+              <button
+                className="detail-close-btn"
+                onClick={() => setSelectedId(null)}
+                aria-label="Close detail panel"
+              >
+                Close ✕
+              </button>
+            </div>
             <OutreachPanel
               venue={selected}
               onStatusChange={s => update(selected.id, { status: s, last_contacted: s === 'contacted' ? new Date().toISOString() : selected.last_contacted })}
@@ -250,8 +351,23 @@ export default function App() {
           {' '}{storageMode === 'supabase' ? 'cloud sync' : 'browser-local'} ·
           Scraper {scraperEnabled ? 'online' : 'offline (set VITE_SCRAPER_URL in deployed mode)'}
         </span>
-        <span className="muted">Venue Intelligence — ops console</span>
+        <div className="footer-links">
+          <button className="footer-link" onClick={() => setPricingOpen(true)}>Pricing</button>
+          <span className="footer-sep">·</span>
+          <button className="footer-link" onClick={() => setMigrationOpen(true)}>Migration guide</button>
+          <span className="footer-sep">·</span>
+          <button className="footer-link" onClick={() => setSettingsOpen(true)}>Settings</button>
+          <span className="footer-sep">·</span>
+          <button className="footer-link" onClick={() => setAboutOpen(true)}>About</button>
+          <span className="footer-sep">·</span>
+          <span className="muted">Venue Intelligence — ops console</span>
+        </div>
       </footer>
+
+      {pricingOpen && <PricingModal onClose={() => setPricingOpen(false)} />}
+      {migrationOpen && <MigrationGuide onClose={() => setMigrationOpen(false)} />}
+      {settingsOpen && <SettingsModal brand={brand} onBrandChange={setBrand} onClose={() => setSettingsOpen(false)} />}
+      {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </div>
   )
 }

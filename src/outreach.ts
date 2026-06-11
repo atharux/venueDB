@@ -1,6 +1,7 @@
-// Outreach templates. UX writing rules applied: brevity, plain language, no
-// fake exclamations, no marketing fluff. Each template is short enough to
-// paste into Instagram DM (~1000 char limit safe).
+// Outreach templates for Hydrat3 — electrolyte lollipops.
+// Pitch: get stocked at nightclubs, festivals, beach clubs, event venues.
+// Target contact: events manager, bar manager, F&B buyer, festival director.
+// Brand voice: direct, fun, no fluff. Tagline: LICK. DANCE. REPEAT.
 
 import type { Venue } from './types'
 
@@ -13,59 +14,68 @@ export interface Template {
 
 const firstName = (v: Venue) => v.booking_contact?.split(' ')[0] ?? 'team'
 
+const venueType = (v: Venue) =>
+  v.tags.includes('FESTIVAL') ? 'festival' :
+  v.tags.includes('BEACH_CLUB') ? 'beach club' :
+  v.category === 'Nightclub' ? 'club' : 'venue'
+
 export const TEMPLATES: Template[] = [
   {
     id: 'ig-intro-short',
     label: 'IG DM — short intro',
     channel: 'instagram_dm',
     build: v =>
-      `Hey ${v.name} ${firstName(v) === 'team' ? 'team' : firstName(v)} — love what you’re doing in ${v.city}. ` +
-      `I run a roster of DJs that fit ${v.tags.includes('SUNSET') ? 'sunset sessions' : v.tags.includes('BEACH_CLUB') ? 'beach club programming' : 'venues like yours'}. ` +
-      `Open to a quick chat about summer dates?`,
+      `Hey ${v.name} ${firstName(v) === 'team' ? 'team' : firstName(v)} — love what you're doing in ${v.city}. ` +
+      `We make Hydrat3 — the world's first electrolyte lollipop. Designed for exactly the crowd on your ${v.tags.includes('BEACH_CLUB') ? 'beach' : v.tags.includes('FESTIVAL') ? 'festival grounds' : 'dancefloor'}. ` +
+      `LICK. DANCE. REPEAT. Worth a quick chat about stocking us?`,
   },
   {
     id: 'ig-collab',
-    label: 'IG DM — collab pitch',
+    label: 'IG DM — product pitch',
     channel: 'instagram_dm',
     build: v =>
-      `Hi — following ${v.name} for a while. We work with DJs and event partners across Greece and the wider Med. ` +
-      `Few ideas that could fit your ${v.tags.includes('BEACH_CLUB') ? 'beach' : ''} programming — happy to send over a one-pager. ` +
-      `Best inbox for that?`,
+      `Hi — following ${v.name} for a while. We're Hydrat3 — electrolyte lollipops built for nightlife and festivals. ` +
+      `Vegan, pocket-sized, no mixing. Perfect for a ${v.tags.includes('BEACH_CLUB') ? 'beach bar' : v.tags.includes('FESTIVAL') ? 'festival crowd' : 'club bar or merch table'}. ` +
+      `What's the best contact for a trade intro?`,
   },
   {
-    id: 'email-bookings',
-    label: 'Email — bookings intro',
+    id: 'email-trade',
+    label: 'Email — trade intro',
     channel: 'email',
     build: v =>
-      `Subject: DJ programming for ${v.name} — summer 2026
+      `Subject: Hydrat3 electrolyte lollipops — stocking opportunity for ${v.name}
 
 Hi ${firstName(v)},
 
-I work with a curated roster of DJs that programs venues across the Mediterranean. Following ${v.name} for a while — the ${v.tags.includes('SUNSET') ? 'sunset' : v.tags.includes('BEACH_CLUB') ? 'beachfront' : ''} vibe fits what we do.
+Reaching out because ${v.name} is exactly the kind of ${venueType(v)} we want to be in.
 
-Would it be useful to share a short deck with sample mixes, references from comparable venues, and indicative fees for the summer window?
+We make Hydrat3 — the world's first electrolyte lollipop. Each one replenishes sodium, potassium, magnesium, zinc, and chloride. No mixing, no bottle. Pocket-sized, heat-resistant, vegan. Built for the 5AM dancefloor moment.
 
-Happy to keep it to one page.
+We're currently placing with clubs and festivals across Europe. Happy to send a sample box and trade sheet — takes five minutes to decide if it fits your bar or merch offering.
+
+Worth a look?
 
 Thanks,
-[Your name]
+[Your name] — Hydrat3
 `,
   },
   {
-    id: 'email-wedding',
-    label: 'Email — weddings angle',
+    id: 'email-festival',
+    label: 'Email — festival / event angle',
     channel: 'email',
     build: v =>
-      `Subject: Destination wedding entertainment — ${v.name}
+      `Subject: Hydrat3 x ${v.name} — electrolyte lollipops for your crowd
 
 Hi ${firstName(v)},
 
-${v.name} comes up regularly when couples ask us about ${v.city} for destination weddings. We provide DJs and live acts that travel for these — usually as part of a package with planners.
+${v.name} comes up every time we talk to people who care about their crowd's experience. We make Hydrat3 — electrolyte lollipops — and the use case writes itself: festival-goers, club nights, beach sessions, after-parties.
 
-If it would be useful, I can share our preferred-vendor sheet and a short cut of recent weddings (with planner references).
+LICK. DANCE. REPEAT.
+
+We'd love to explore a stocking arrangement or branded partnership for your ${v.tags.includes('FESTIVAL') ? 'next festival run' : 'upcoming season'}. Can I send a sample box and a one-pager on trade terms?
 
 Thanks,
-[Your name]
+[Your name] — Hydrat3
 `,
   },
   {
@@ -73,7 +83,7 @@ Thanks,
     label: 'WhatsApp — quick line',
     channel: 'whatsapp',
     build: v =>
-      `Hi — DJ booking agency reaching out re: ${v.name}. Could I send you a short intro about summer dates? Cheers.`,
+      `Hi — reaching out from Hydrat3. We make electrolyte lollipops for nightlife and festival crowds — stocking at clubs across Europe. Could I send a quick intro about ${v.name}? Thanks.`,
   },
 ]
 

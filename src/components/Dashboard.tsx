@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Venue, OutreachStatus, City, Category, Tag } from '../types'
 import { STATUS_LABEL, STATUSES } from '../types'
-import { enrichLead } from '../scraper'
-import { loadAiSettings } from '../aiSettings'
+import { BulkEnrichPanel } from './BulkEnrichPanel'
+import { ProGate } from './ProGate'
 
 interface Props {
   venues: Venue[]
@@ -57,7 +57,7 @@ export function Dashboard({ venues, onDrillDown, onUpdateVenue, entityLabel = 'v
       <div className="stat-row">
         <Stat label={`Total ${entityLabel}`} value={total} />
         <Stat label="Reachable" value={reachable} hint={`${pct(reachable, total)}% with a contact channel`} />
-        <Stat label="Has DJs" value={stats.hasDjs} hint={`${pct(stats.hasDjs, total)}% confirmed DJ programming`} />
+        <Stat label="DJ / Live events" value={stats.hasDjs} hint={`${pct(stats.hasDjs, total)}% — prime Hydrat3 prospects`} />
         <Stat label="Ready to contact" value={stats.byStatus.get('ready') ?? 0} />
         <Stat label="In conversation" value={stats.byStatus.get('in_conversation') ?? 0} />
         <Stat label="Won" value={stats.byStatus.get('won') ?? 0} tone="positive" />
@@ -66,207 +66,223 @@ export function Dashboard({ venues, onDrillDown, onUpdateVenue, entityLabel = 'v
       {onUpdateVenue ? <BulkEnrichPanel venues={venues} onUpdateVenue={onUpdateVenue} entityLabel={entityLabel} /> : null}
 
       <div className="dashboard-grid">
-        <div className="card">
-          <h3>By status {onDrillDown ? <span className="card-hint">click to filter</span> : null}</h3>
-          <BarList
-            entries={STATUSES.map(s => [STATUS_LABEL[s], stats.byStatus.get(s) ?? 0, s])}
-            max={Math.max(1, ...Array.from(stats.byStatus.values()))}
-            onClick={onDrillDown ? key => onDrillDown({ status: key as OutreachStatus }) : undefined}
-          />
+        <FilterCard
+          title="By status"
+          hint={onDrillDown ? 'click to filter' : undefined}
+          entries={STATUSES.map(s => [STATUS_LABEL[s], stats.byStatus.get(s) ?? 0, s])}
+          onDrillDown={onDrillDown ? key => onDrillDown({ status: key as OutreachStatus }) : undefined}
+        />
+        <FilterCard
+          title="By city"
+          hint={onDrillDown ? 'click to filter' : undefined}
+          entries={Array.from(stats.byCity.entries())
+            .sort((a, b) => b[1] - a[1])
+            .map(([label, value]) => [label, value, label])}
+          onDrillDown={onDrillDown ? key => onDrillDown({ city: key as City }) : undefined}
+        />
+        <FilterCard
+          title="By category"
+          hint={onDrillDown ? 'click to filter' : undefined}
+          entries={Array.from(stats.byCategory.entries())
+            .sort((a, b) => b[1] - a[1])
+            .map(([label, value]) => [label, value, label])}
+          onDrillDown={onDrillDown ? key => onDrillDown({ category: key as Category }) : undefined}
+        />
+        <FilterCard
+          title="Contact coverage"
+          entries={[
+            ['Website', stats.withWebsite],
+            ['Email', stats.withEmail],
+            ['Instagram', stats.withInstagram],
+            ['Facebook', stats.withFacebook],
+            ['Phone', stats.withPhone],
+          ]}
+          showPct={total}
+          searchable={false}
+        />
+      </div>
+
+      <div className="dash-pro-section">
+        <div className="dash-pro-header">
+          <span className="pro-badge">Pro</span>
+          <span className="dash-pro-title">CRM & campaign tools</span>
+          <span className="dash-pro-desc">Pipeline tracking, bulk outreach sequences, and template performance analytics.</span>
         </div>
-        <div className="card">
-          <h3>By city {onDrillDown ? <span className="card-hint">click to filter</span> : null}</h3>
-          <BarList
-            entries={Array.from(stats.byCity.entries())
-              .sort((a, b) => b[1] - a[1])
-              .map(([label, value]) => [label, value, label])}
-            max={Math.max(1, ...Array.from(stats.byCity.values()))}
-            onClick={onDrillDown ? key => onDrillDown({ city: key as City }) : undefined}
-          />
-        </div>
-        <div className="card">
-          <h3>By category {onDrillDown ? <span className="card-hint">click to filter</span> : null}</h3>
-          <BarList
-            entries={Array.from(stats.byCategory.entries())
-              .sort((a, b) => b[1] - a[1])
-              .map(([label, value]) => [label, value, label])}
-            max={Math.max(1, ...Array.from(stats.byCategory.values()))}
-            onClick={onDrillDown ? key => onDrillDown({ category: key as Category }) : undefined}
-          />
-        </div>
-        <div className="card">
-          <h3>Contact coverage</h3>
-          <BarList
-            entries={[
-              ['Website', stats.withWebsite],
-              ['Email', stats.withEmail],
-              ['Instagram', stats.withInstagram],
-              ['Facebook', stats.withFacebook],
-              ['Phone', stats.withPhone],
-            ]}
-            max={Math.max(1, total)}
-            showPct={total}
-          />
+        <div className="dashboard-grid">
+          <ProGate
+            feature="Pipeline View"
+            description="A live kanban of every venue by deal stage — from Prospecting through to Won. Drag to advance, click to open."
+            className="card dash-pro-card"
+          >
+            <h3>Pipeline View</h3>
+            <div className="mock-kanban">
+              {([
+                { label: 'Prospecting', count: 24, cards: ['Tresor Berlin', 'Arena Club'], variant: '' },
+                { label: 'Contacted', count: 8, cards: ['Fabric London', 'De School AMS'], variant: '' },
+                { label: 'Replied', count: 3, cards: ['Shelter Berlin', 'Void Berlin'], variant: 'reply' },
+                { label: 'Won', count: 1, cards: ['Watergate Berlin'], variant: 'won' },
+              ] as const).map(col => (
+                <div key={col.label} className="mock-kanban-col">
+                  <div className="mock-kanban-col-header">
+                    <span className="mock-kanban-label">{col.label}</span>
+                    <span className={`mock-kanban-count ${col.variant}`}>{col.count}</span>
+                  </div>
+                  {col.cards.map(c => (
+                    <div key={c} className={`mock-kanban-card ${col.variant}`}>{c}</div>
+                  ))}
+                  {col.count > col.cards.length && (
+                    <span className="mock-kanban-more">+{col.count - col.cards.length} more</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ProGate>
+
+          <ProGate
+            feature="Campaign Builder"
+            description="Filter by region and category, pick a template, and launch a bulk outreach sequence to all matching venues in one action."
+            className="card dash-pro-card"
+          >
+            <h3>Campaign Builder</h3>
+            <div className="mock-cb">
+              <div className="mock-cb-row">
+                <span className="mock-field-label">Region</span>
+                <div className="mock-chip-row">
+                  <span className="mock-chip">Germany ✕</span>
+                  <span className="mock-chip">Austria ✕</span>
+                  <span className="mock-chip mock-chip-add">+ add</span>
+                </div>
+              </div>
+              <div className="mock-cb-row">
+                <span className="mock-field-label">Category</span>
+                <div className="mock-chip-row">
+                  <span className="mock-chip">Nightclub ✕</span>
+                  <span className="mock-chip mock-chip-add">+ add</span>
+                </div>
+              </div>
+              <div className="mock-cb-row">
+                <span className="mock-field-label">Template</span>
+                <select className="mock-select" disabled><option>Hydrat3 Trade Intro v2</option></select>
+              </div>
+              <div className="mock-cb-preview">
+                "Hi {'{name}'}, reaching out about stocking Hydrat3 electrolyte lollipops at {'{venue}'}…"
+              </div>
+              <div className="mock-cb-footer">
+                <span className="mock-cb-match">42 venues · ~8–13 expected replies</span>
+                <button className="mock-btn mock-btn-accent" disabled>Review & launch →</button>
+              </div>
+            </div>
+          </ProGate>
+
+          <ProGate
+            feature="Template Library"
+            description="Save, version, and compare outreach templates. Track reply rates per template to double down on what works."
+            className="card dash-pro-card"
+          >
+            <h3>Template Library</h3>
+            <div className="mock-tpl-table">
+              <div className="mock-tpl-header">
+                <span>Template</span>
+                <span>Sent</span>
+                <span>Opens</span>
+                <span>Reply%</span>
+              </div>
+              {([
+                { name: 'Hydrat3 Trade Intro v2', sent: 23, opens: '71%', reply: 31 },
+                { name: 'Festival Pitch', sent: 8, opens: '63%', reply: 50 },
+                { name: 'Follow-up #1 — Sample Box', sent: 12, opens: '58%', reply: 25 },
+                { name: 'Cold — Bar Manager', sent: 5, opens: '40%', reply: 20 },
+              ] as const).map(t => (
+                <div key={t.name} className="mock-tpl-row-v2">
+                  <span className="mock-tpl-name">{t.name}</span>
+                  <span className="mock-tpl-stat">{t.sent}</span>
+                  <span className="mock-tpl-stat">{t.opens}</span>
+                  <div className="mock-tpl-reply-cell">
+                    <span className="mock-tpl-stat accent">{t.reply}%</span>
+                    <div className="mock-tpl-mini-bar">
+                      <div className="mock-tpl-mini-fill" style={{ width: `${t.reply * 2}%` }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <button className="mock-btn" disabled style={{ marginTop: 8, width: '100%' }}>+ New template</button>
+            </div>
+          </ProGate>
         </div>
       </div>
     </section>
   )
 }
 
-// ---------- Bulk enrichment panel ----------
+// ---------- Filterable + collapsible analytics card ----------
 
-interface BulkEnrichProps {
-  venues: Venue[]
-  onUpdateVenue: (id: string, patch: Partial<Venue>) => Promise<void> | void
-  entityLabel: string
-}
+type FilterEntry = [label: string, value: number, key?: string]
 
-function isIncomplete(v: Venue) {
-  return !v.email || !v.instagram || !v.phone || !v.website
-}
+function FilterCard({
+  title,
+  hint,
+  entries,
+  showPct,
+  onDrillDown,
+  searchable = true,
+}: {
+  title: string
+  hint?: string
+  entries: FilterEntry[]
+  showPct?: number
+  onDrillDown?: (key: string) => void
+  searchable?: boolean
+}) {
+  const [query, setQuery] = useState('')
+  const [collapsed, setCollapsed] = useState(false)
 
-function BulkEnrichPanel({ venues, onUpdateVenue, entityLabel }: BulkEnrichProps) {
-  const [running, setRunning] = useState(false)
-  const [progress, setProgress] = useState({ done: 0, total: 0, current: '' })
-  const [summary, setSummary] = useState<{ enriched: number; errors: number; ran: number } | null>(null)
-  const [log, setLog] = useState<string[]>([])
-  const cancelRef = useRef(false)
-
-  const incomplete = useMemo(() => venues.filter(isIncomplete), [venues])
-  const aiSettings = loadAiSettings()
-
-  useEffect(() => () => { cancelRef.current = true }, [])
-
-  const start = async () => {
-    if (running || incomplete.length === 0) return
-    setRunning(true)
-    setSummary(null)
-    setLog([])
-    cancelRef.current = false
-
-    let enriched = 0
-    let errors = 0
-    let ran = 0
-
-    for (const [i, v] of incomplete.entries()) {
-      if (cancelRef.current) break
-      ran++
-      setProgress({ done: i, total: incomplete.length, current: v.name })
-
-      try {
-        const result = await enrichLead(
-          {
-            name: v.name,
-            city: v.city,
-            website: v.website,
-            instagram: v.instagram,
-            email: v.email,
-            phone: v.phone,
-            notes: v.notes,
-          },
-          aiSettings,
-        )
-
-        // Only patch fields the venue was missing — never overwrite real data.
-        const patch: Partial<Venue> = {}
-        if (!v.website && result.website) patch.website = result.website
-        if (!v.instagram && result.instagram) patch.instagram = result.instagram
-        if (!v.email && result.email) patch.email = result.email
-        if (!v.phone && result.phone) patch.phone = result.phone
-
-        // Build a short evidence string from per-page attempts so the log
-        // proves the scraper actually ran (vs failing silently).
-        const evidence = (result.attempts ?? []).length === 0
-          ? 'no attempts'
-          : (result.attempts ?? [])
-              .map(a => {
-                if (!a.ok) return `${shortPath(a.url)}=err`
-                const total = a.emails + a.instagrams + a.phones
-                return `${shortPath(a.url)}=${total > 0 ? `${a.emails}e/${a.instagrams}i/${a.phones}p` : '0'}`
-              })
-              .join(' ')
-
-        if (Object.keys(patch).length > 0) {
-          await onUpdateVenue(v.id, patch)
-          enriched++
-          setLog(l => [
-            `+ ${v.name}: patched ${Object.keys(patch).join(', ')} · ${evidence}`,
-            ...l.slice(0, 39),
-          ])
-        } else {
-          setLog(l => [
-            `· ${v.name}: nothing new · ${evidence}`,
-            ...l.slice(0, 39),
-          ])
-        }
-      } catch (err) {
-        errors++
-        const msg = err instanceof Error ? err.message : String(err)
-        setLog(l => [`× ${v.name}: ${msg.slice(0, 100)}`, ...l.slice(0, 39)])
-      }
-    }
-
-    setProgress({ done: incomplete.length, total: incomplete.length, current: '' })
-    setSummary({ enriched, errors, ran })
-    setRunning(false)
-  }
-
-  const cancel = () => { cancelRef.current = true }
+  const filtered = query
+    ? entries.filter(([label]) => label.toLowerCase().includes(query.toLowerCase()))
+    : entries
+  const filteredMax = filtered.length > 0 ? Math.max(1, ...filtered.map(([, v]) => v)) : 1
 
   return (
-    <div className="card enrich-panel">
-      <div className="enrich-header">
-        <div>
-          <h3>Enrich missing contacts</h3>
-          <p className="muted small">
-            {incomplete.length} of {venues.length} {entityLabel} are missing at least one channel
-            {' '}(website, IG, email, or phone). The scraper fetches each website and pulls
-            public contacts — no fabrication.
-          </p>
-        </div>
-        <div className="enrich-actions">
-          {!running ? (
-            <button className="primary-btn" onClick={start} disabled={incomplete.length === 0}>
-              {incomplete.length === 0 ? 'Nothing to enrich' : `Enrich ${incomplete.length} ${entityLabel}`}
-            </button>
-          ) : (
-            <button className="danger-btn" onClick={cancel}>
-              Cancel after current
-            </button>
-          )}
-        </div>
+    <div className={`card filter-card ${collapsed ? 'is-collapsed' : ''}`}>
+      <div className="card-header">
+        <button
+          className="card-collapse-btn"
+          onClick={() => setCollapsed(c => !c)}
+          aria-label={collapsed ? 'Expand section' : 'Collapse section'}
+        >
+          <span className={`card-chevron ${collapsed ? 'is-collapsed' : ''}`}>▾</span>
+        </button>
+        <h3 className="card-header-title">
+          {title}
+          {!collapsed && hint ? <span className="card-hint">{hint}</span> : null}
+        </h3>
+        {!collapsed && (
+          <span className="card-entry-count">
+            {query && filtered.length !== entries.length
+              ? `${filtered.length}/${entries.length}`
+              : entries.length}
+          </span>
+        )}
+        {!collapsed && searchable && (
+          <input
+            type="search"
+            className="card-search"
+            placeholder="Filter…"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onClick={e => e.stopPropagation()}
+          />
+        )}
       </div>
-
-      {running || progress.total > 0 ? (
-        <div className="enrich-progress">
-          <div className="bar-track">
-            <div
-              className="bar-fill"
-              style={{ width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%` }}
-            />
-          </div>
-          <div className="enrich-progress-text">
-            {running
-              ? `${progress.done}/${progress.total} · ${progress.current}`
-              : summary
-                ? `Done. Enriched ${summary.enriched} of ${summary.ran}${summary.errors > 0 ? `, ${summary.errors} errors` : ''}.`
-                : ''}
-          </div>
+      {!collapsed && (
+        <div className="card-body">
+          <BarList entries={filtered} max={filteredMax} showPct={showPct} onClick={onDrillDown} />
         </div>
-      ) : null}
-
-      {log.length > 0 ? (
-        <ul className="enrich-log">
-          {log.map((line, i) => (
-            <li key={i} className={line.startsWith('×') ? 'log-err' : line.startsWith('+') ? 'log-ok' : 'log-neutral'}>
-              {line}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      )}
     </div>
   )
 }
+
+// BulkEnrichPanel extracted to ./BulkEnrichPanel.tsx
 
 // ---------- Small primitives ----------
 
@@ -348,12 +364,3 @@ function pct(value: number, total: number) {
   return Math.round((value / total) * 100)
 }
 
-/** Compact a URL down to /pathname for the per-row scraper log. */
-function shortPath(url: string): string {
-  try {
-    const u = new URL(url)
-    return u.pathname === '/' ? '/' : u.pathname
-  } catch {
-    return url.slice(0, 24)
-  }
-}
