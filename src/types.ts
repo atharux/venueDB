@@ -353,6 +353,18 @@ export const CITY_TO_REGION: Record<string, string> = {
   'Paris (Seine Riverside)': 'France',
   'Paris (Parc De La Villette)': 'France',
   'Marseille (Friche La Belle De Mai)': 'France',
+  // Netherlands (extended 2)
+  'The Hague': 'Netherlands',
+  'Multiple Nl Cities': 'Netherlands',
+  // Poland (raw apostrophe-S variant)
+  'łóDź': 'Poland',
+  // Spain (post-normalise DC-10 form)
+  'Dc-10': 'Spain',
+  // Malta (raw apostrophe-S variants — fixed by normalise-all)
+  "St Julian'S": 'Malta',
+  "Paceville, St Julian'S": 'Malta',
+  // UK (raw apostrophe-S variant — fixed by normalise-all)
+  "London (King'S Cross)": 'UK',
   // Italy (extended)
   Bologna: 'Italy',
   Turin: 'Italy',
