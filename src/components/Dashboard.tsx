@@ -58,9 +58,12 @@ export function Dashboard({ venues, onDrillDown, onUpdateVenue, entityLabel = 'v
         <Stat label={`Total ${entityLabel}`} value={total} />
         <Stat label="Reachable" value={reachable} hint={`${pct(reachable, total)}% with a contact channel`} />
         <Stat label="DJ / Live events" value={stats.hasDjs} hint={`${pct(stats.hasDjs, total)}% — prime Hydrat3 prospects`} />
-        <Stat label="Ready to contact" value={stats.byStatus.get('ready') ?? 0} />
-        <Stat label="In conversation" value={stats.byStatus.get('in_conversation') ?? 0} />
-        <Stat label="Won" value={stats.byStatus.get('won') ?? 0} tone="positive" />
+        <Stat label="Ready to contact" value={stats.byStatus.get('ready') ?? 0}
+          onClick={onDrillDown ? () => onDrillDown({ status: 'ready' }) : undefined} />
+        <Stat label="In conversation" value={stats.byStatus.get('in_conversation') ?? 0}
+          onClick={onDrillDown ? () => onDrillDown({ status: 'in_conversation' }) : undefined} />
+        <Stat label="Won" value={stats.byStatus.get('won') ?? 0} tone="positive"
+          onClick={onDrillDown ? () => onDrillDown({ status: 'won' }) : undefined} />
       </div>
 
       {onUpdateVenue ? <BulkEnrichPanel venues={venues} onUpdateVenue={onUpdateVenue} entityLabel={entityLabel} /> : null}
@@ -291,14 +294,20 @@ function Stat({
   value,
   hint,
   tone,
+  onClick,
 }: {
   label: string
   value: number
   hint?: string
   tone?: 'positive'
+  onClick?: () => void
 }) {
   return (
-    <div className={`stat ${tone ?? ''}`}>
+    <div
+      className={`stat ${tone ?? ''} ${onClick ? 'stat-clickable' : ''}`}
+      onClick={onClick}
+      title={onClick ? `Filter by "${label}"` : undefined}
+    >
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
       {hint ? <div className="stat-hint">{hint}</div> : null}

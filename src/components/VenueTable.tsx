@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Venue, City, Category, OutreachStatus, Tag } from '../types'
 import { CITIES, CATEGORIES, STATUSES, STATUS_LABEL, TAGS, REGIONS, getRegion } from '../types'
 import { facebookUrl, instagramUrl, websiteUrl } from '../outreach'
@@ -15,6 +15,8 @@ interface Props {
     region?: string | ''
   }
   recentlyAddedIds?: Set<string>
+  persistKey?: string
+  onNavigateDiscover?: () => void
 }
 
 type SortKey = 'name' | 'city' | 'region' | 'category' | 'status' | 'luxury' | 'updated'
@@ -146,17 +148,23 @@ const BUILTIN_COLUMNS: BuiltInColumn[] = [
 
 const BUILTIN_BY_KEY = new Map(BUILTIN_COLUMNS.map(c => [c.key, c]))
 
-export function VenueTable({ venues, selectedId, onSelect, initialFilters, recentlyAddedIds }: Props) {
-  const [query, setQuery] = useState('')
-  const [cityFilter, setCityFilter] = useState<City | ''>(initialFilters?.city ?? '')
-  const [regionFilter, setRegionFilter] = useState<string | ''>(initialFilters?.region ?? '')
-  const [categoryFilter, setCategoryFilter] = useState<Category | ''>(initialFilters?.category ?? '')
-  const [statusFilter, setStatusFilter] = useState<OutreachStatus | ''>(initialFilters?.status ?? '')
-  const [tagFilter, setTagFilter] = useState<Tag | ''>(initialFilters?.tag ?? '')
-  const [hasContactOnly, setHasContactOnly] = useState(false)
-  const [verifiedFilter, setVerifiedFilter] = useState<VerifiedFilter>('')
-  const [sortKey, setSortKey] = useState<SortKey>('updated')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+export function VenueTable({ venues, selectedId, onSelect, initialFilters, recentlyAddedIds, persistKey, onNavigateDiscover }: Props) {
+  // Persisted filter state — loaded once per mount (which happens on every tab switch).
+  // initialFilters (dashboard drill-down) overrides via the useEffect below.
+  const _pfRef = useRef<Partial<PersistedFilterState> | null>(null)
+  if (_pfRef.current === null) _pfRef.current = persistKey ? loadFilterState(persistKey) : {}
+  const pf = _pfRef.current
+
+  const [query, setQuery] = useState(pf.query ?? '')
+  const [cityFilter, setCityFilter] = useState<City | ''>(initialFilters?.city ?? pf.cityFilter ?? '')
+  const [regionFilter, setRegionFilter] = useState<string | ''>(initialFilters?.region ?? pf.regionFilter ?? '')
+  const [categoryFilter, setCategoryFilter] = useState<Category | ''>(initialFilters?.category ?? pf.categoryFilter ?? '')
+  const [statusFilter, setStatusFilter] = useState<OutreachStatus | ''>(initialFilters?.status ?? pf.statusFilter ?? '')
+  const [tagFilter, setTagFilter] = useState<Tag | ''>(initialFilters?.tag ?? pf.tagFilter ?? '')
+  const [hasContactOnly, setHasContactOnly] = useState(pf.hasContactOnly ?? false)
+  const [verifiedFilter, setVerifiedFilter] = useState<VerifiedFilter>(pf.verifiedFilter ?? '')
+  const [sortKey, setSortKey] = useState<SortKey>(pf.sortKey ?? 'updated')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(pf.sortDir ?? 'desc')
   const [pinnedColumns, setPinnedColumns] = useState<string[]>(() => loadPinnedColumns())
   const [draggedPinnedColumn, setDraggedPinnedColumn] = useState<string | null>(null)
 
@@ -171,6 +179,12 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
     if (initialFilters.status !== undefined) setStatusFilter(initialFilters.status)
     if (initialFilters.tag !== undefined) setTagFilter(initialFilters.tag)
   }, [initialFilters?.city, initialFilters?.region, initialFilters?.category, initialFilters?.status, initialFilters?.tag, initialFilters])
+
+  // Persist filter + sort state to localStorage so tab switches don't reset the view.
+  useEffect(() => {
+    if (!persistKey) return
+    saveFilterState(persistKey, { query, cityFilter, regionFilter, categoryFilter, statusFilter, tagFilter, hasContactOnly, verifiedFilter, sortKey, sortDir })
+  }, [persistKey, query, cityFilter, regionFilter, categoryFilter, statusFilter, tagFilter, hasContactOnly, verifiedFilter, sortKey, sortDir])
 
   const availableDynamicColumns = useMemo(() => {
     const counts = new Map<string, number>()
@@ -280,7 +294,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
   }
 
   const arrow = (key: SortKey) =>
-    sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+    sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ↕'
 
   return (
     <section className="venue-table">
@@ -347,7 +361,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
           value={verifiedFilter}
           onChange={e => setVerifiedFilter(e.target.value as VerifiedFilter)}
         >
-          <option value="">All data states</option>
+          <option value="">Verified state</option>
           <option value="unverified">Unverified</option>
           <option value="stale">Stale (&gt;90 days)</option>
           <option value="verified">Verified</option>
@@ -519,7 +533,18 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={8 + activeColumns.length} className="empty-row">
-                  No venues match. Clear filters or add one.
+                  {venues.length === 0 ? (
+                    <div className="empty-welcome">
+                      <span>No venues yet.</span>
+                      {onNavigateDiscover ? (
+                        <button className="link-btn" onClick={onNavigateDiscover}>
+                          Get started: Discover venues →
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    'No venues match your filters. Clear filters or add one.'
+                  )}
                 </td>
               </tr>
             ) : null}
@@ -553,4 +578,35 @@ function reorderPinnedColumns(columns: string[], from: string, to: string) {
   next.splice(fromIndex, 1)
   next.splice(toIndex, 0, from)
   return next
+}
+
+// ── Filter state persistence ──────────────────────────────────────────────────
+
+interface PersistedFilterState {
+  query: string
+  cityFilter: City | ''
+  regionFilter: string
+  categoryFilter: Category | ''
+  statusFilter: OutreachStatus | ''
+  tagFilter: Tag | ''
+  hasContactOnly: boolean
+  verifiedFilter: VerifiedFilter
+  sortKey: SortKey
+  sortDir: 'asc' | 'desc'
+}
+
+function loadFilterState(key: string): Partial<PersistedFilterState> {
+  try {
+    const raw = localStorage.getItem(`venue-table-state-${key}-v1`)
+    if (!raw) return {}
+    return JSON.parse(raw) as Partial<PersistedFilterState>
+  } catch {
+    return {}
+  }
+}
+
+function saveFilterState(key: string, state: PersistedFilterState) {
+  try {
+    localStorage.setItem(`venue-table-state-${key}-v1`, JSON.stringify(state))
+  } catch {}
 }

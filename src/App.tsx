@@ -100,6 +100,19 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handler)
   }, [actionsOpen])
 
+  // Escape closes the detail pane (skips when focus is inside a form element)
+  useEffect(() => {
+    if (!selected) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const tag = (document.activeElement as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      setSelectedId(null)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [selected])
+
   return (
     <div className={`app ${tab === 'festivals' || (tab === 'dashboard' && dashEntity === 'festival') ? 'is-festivals' : ''} ${brand === 'hydrat3' ? 'brand-hydrat3' : ''}`}>
       <header className="app-header">
@@ -277,12 +290,15 @@ export default function App() {
                 onSelect={setSelectedId}
                 initialFilters={tableFilters}
                 recentlyAddedIds={recentlyAddedIds}
+                persistKey={tab}
+                onNavigateDiscover={() => setTab('discover')}
               />
             </>
           ) : null}
           {tab === 'dashboard' ? (
             <>
-              <div className="scan-filter-row" role="tablist" aria-label="Dashboard entity">
+              <div className="scan-filter-row" role="group" aria-label="Dashboard entity selector">
+                <span className="dash-entity-label">Showing:</span>
                 <button
                   className={`chip ${dashEntity === 'venue' ? 'active' : ''}`}
                   onClick={() => setDashEntity('venue')}

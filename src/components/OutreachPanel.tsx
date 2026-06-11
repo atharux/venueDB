@@ -170,7 +170,7 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
         onClick={() => setProExpanded(x => !x)}
         aria-expanded={proExpanded}
       >
-        <span>Upgrade features</span>
+        <span>Pro features (preview)</span>
         <span className="pro-features-toggle-caret">{proExpanded ? '▲' : '▾'}</span>
       </button>
 

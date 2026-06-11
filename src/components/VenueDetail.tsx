@@ -15,7 +15,6 @@ interface Props {
 }
 
 export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
-  const [showRawJson, setShowRawJson] = useState(false)
   const [enriching, setEnriching] = useState(false)
   const [enrichNote, setEnrichNote] = useState<string | null>(null)
   const [verifierName, setVerifierName] = useState(
@@ -124,7 +123,17 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
             <span className="record-health-label">Needs attention</span>
             <div className="record-health-gaps">
               {gaps.map(g => (
-                <span key={g} className="record-health-gap">{g}</span>
+                <button
+                  key={g}
+                  className="record-health-gap"
+                  onClick={() => document.getElementById(
+                    g.includes('contact') || g.includes('email') || g.includes('website')
+                      ? 'detail-contact'
+                      : 'detail-status'
+                  )?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
+                >
+                  {g} ↓
+                </button>
               ))}
             </div>
           </div>
@@ -250,7 +259,7 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
         </Field>
       </section>
 
-      <section className="detail-section">
+      <section className="detail-section" id="detail-contact">
         <div className="section-header">
           <h3>Contact</h3>
           <ScrapeButton
@@ -419,7 +428,7 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
         </section>
       ) : null}
 
-      <section className="detail-section">
+      <section className="detail-section" id="detail-status">
         <h3>Status</h3>
         <div className="field-row">
           <Field label="Outreach status">
@@ -483,12 +492,10 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
           <span>Source: {venue.source ?? '—'}</span>
           <span>Updated: {new Date(venue.updated_at).toLocaleString()}</span>
         </div>
-        <button className="link-btn" onClick={() => setShowRawJson(s => !s)}>
-          {showRawJson ? 'Hide' : 'Show'} raw JSON
-        </button>
-        {showRawJson ? (
+        <details>
+          <summary className="link-btn">Debug: raw record data</summary>
           <pre className="raw-json">{JSON.stringify(venue, null, 2)}</pre>
-        ) : null}
+        </details>
       </section>
 
       <section className="detail-section danger">
