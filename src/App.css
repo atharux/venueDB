@@ -1192,6 +1192,7 @@ tbody td {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  padding-bottom: 7px;
 }
 
 .status-pills {
