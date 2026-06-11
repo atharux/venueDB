@@ -28,7 +28,7 @@ const TIERS = [
     name: 'Pro',
     price: '€49',
     period: 'per month',
-    description: 'Turn your database into an active CRM with contacts, timelines, and campaign tools.',
+    description: 'Keep your pipeline alive. Contacts change, venues close, seasons end — Pro keeps your database current and your outreach moving.',
     badge: 'Recommended',
     features: [
       'Everything in Starter',
@@ -49,7 +49,7 @@ const TIERS = [
     name: 'Agency',
     price: '€149',
     period: 'per month',
-    description: 'Multi-client operations with full team access, API, and white-label options.',
+    description: 'Run live venue intelligence for multiple brands, with automated refresh and competitive monitoring across markets.',
     features: [
       'Everything in Pro',
       'Unlimited users + role-based access',
@@ -116,8 +116,8 @@ export function PricingModal({ onClose, highlightFeature }: Props) {
         </div>
 
         <p className="pricing-footer-note">
-          All plans include unlimited venue records. Pricing in EUR excl. VAT.
-          Cancel anytime.
+          All plans include unlimited venue records. Pricing in EUR excl. VAT. Cancel anytime.
+          Nightlife contacts churn every 6–12 months — an active plan keeps your data, and your deals, from going cold.
         </p>
       </div>
     </div>
