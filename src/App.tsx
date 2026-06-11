@@ -13,6 +13,7 @@ import { MigrationGuide } from './components/MigrationGuide'
 import { SettingsModal, loadBrandTheme } from './components/SettingsModal'
 import type { BrandTheme } from './components/SettingsModal'
 import { AboutModal } from './components/AboutModal'
+import { RegionAuditModal } from './components/RegionAuditModal'
 import { exportJson, exportCsv, resetLocalToSeed } from './storage'
 import { scraperEnabled } from './scraper'
 import { CITIES } from './types'
@@ -36,7 +37,7 @@ function entityOf(v: Venue): EntityType {
 }
 
 export default function App() {
-  const { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, cleanupPhones, storageMode, recentlyAddedIds } = useVenues()
+  const { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, cleanupPhones, normaliseAll, storageMode, recentlyAddedIds } = useVenues()
   const [tab, setTab] = useState<TabId>('venues')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tableFilters, setTableFilters] = useState<TableFilters | undefined>(undefined)
@@ -46,6 +47,7 @@ export default function App() {
   const [migrationOpen, setMigrationOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [regionAuditOpen, setRegionAuditOpen] = useState(false)
   const [brand, setBrand] = useState<BrandTheme>(loadBrandTheme)
 
   // The dashboard tab has its own entity toggle — without it, the dashboard
@@ -248,6 +250,26 @@ export default function App() {
                 >
                   Clean phone numbers
                 </button>
+                <div className="dropdown-divider" />
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setActionsOpen(false)
+                    if (confirm('Re-run data normalisation on all records? This fixes city casing, trims whitespace, and cleans contact fields. updated_at will be bumped on changed records.')) {
+                      void normaliseAll().then(changed => {
+                        alert(changed > 0 ? `Normalised ${changed} record${changed !== 1 ? 's' : ''}.` : 'All records already clean.')
+                      })
+                    }
+                  }}
+                >
+                  Normalise all records
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => { setActionsOpen(false); setRegionAuditOpen(true) }}
+                >
+                  Region audit
+                </button>
               </div>
             )}
           </div>
@@ -370,6 +392,7 @@ export default function App() {
       {migrationOpen && <MigrationGuide onClose={() => setMigrationOpen(false)} />}
       {settingsOpen && <SettingsModal brand={brand} onBrandChange={setBrand} onClose={() => setSettingsOpen(false)} />}
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
+      {regionAuditOpen && <RegionAuditModal venues={venues} onClose={() => setRegionAuditOpen(false)} />}
 
       {/* Global city datalist — always in DOM so any input[list="cities-datalist"] works */}
       <datalist id="cities-datalist">

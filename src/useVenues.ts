@@ -131,6 +131,25 @@ export function useVenues() {
     [upsert],
   )
 
+  const normaliseAll = useCallback(async () => {
+    let changed = 0
+    for (const venue of venuesRef.current) {
+      const patch = normalise({
+        name: venue.name, district: venue.district, notes: venue.notes,
+        phone: venue.phone, verified_by: venue.verified_by, city: venue.city,
+        email: venue.email, instagram: venue.instagram, website: venue.website,
+      })
+      const hasChange = (Object.keys(patch) as (keyof typeof patch)[]).some(
+        k => patch[k] !== venue[k as keyof typeof venue],
+      )
+      if (hasChange) {
+        await upsert({ ...venue, ...patch, updated_at: new Date().toISOString() })
+        changed++
+      }
+    }
+    return changed
+  }, [upsert])
+
   const remove = useCallback(
     async (id: string) => {
       const next = venuesRef.current.filter(v => v.id !== id)
@@ -182,5 +201,5 @@ export function useVenues() {
     }
   }, [])
 
-  return { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, cleanupPhones, storageMode, recentlyAddedIds }
+  return { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, cleanupPhones, normaliseAll, storageMode, recentlyAddedIds }
 }
