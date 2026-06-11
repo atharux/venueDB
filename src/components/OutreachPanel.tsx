@@ -20,6 +20,7 @@ interface Props {
 export function OutreachPanel({ venue, onStatusChange }: Props) {
   const [templateId, setTemplateId] = useState(TEMPLATES[0].id)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [proExpanded, setProExpanded] = useState(false)
 
   const template = TEMPLATES.find(t => t.id === templateId) ?? TEMPLATES[0]
   const message = template.build(venue)
@@ -164,7 +165,16 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
         )}
       </div>
 
-      <div className="pro-features-stack">
+      <button
+        className="pro-features-toggle"
+        onClick={() => setProExpanded(x => !x)}
+        aria-expanded={proExpanded}
+      >
+        <span>Upgrade features</span>
+        <span className="pro-features-toggle-caret">{proExpanded ? '▲' : '▾'}</span>
+      </button>
+
+      {proExpanded && <div className="pro-features-stack">
         <ProGate
           feature="Contact History"
           description="Every email, call, and reply for this venue in a single timeline. Never lose context on a warm lead again."
@@ -243,7 +253,7 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
             <button className="mock-btn mock-btn-accent" disabled>Push to selected campaign →</button>
           </div>
         </ProGate>
-      </div>
+      </div>}
     </section>
   )
 }

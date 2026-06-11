@@ -2032,11 +2032,38 @@ tbody td {
 }
 
 /* Pro features stack in outreach panel */
+.pro-features-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  margin-top: 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.pro-features-toggle:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.pro-features-toggle-caret {
+  font-size: 0.65rem;
+  opacity: 0.6;
+}
+
 .pro-features-stack {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 4px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
