@@ -2,19 +2,27 @@
 // Schema derived 1:1 from venue-outreach-DB.md spec.
 
 export const CITIES = [
-  'Berlin',
-  'Paris',
-  'Dubai',
-  'Amsterdam',
-  'Chania',
-  'Heraklion',
-  'Hersonissos',
-  'Malia',
-  'Rethymno',
-  'Agios Nikolaos',
-  'Elounda',
-  'Makrigialos',
-  'Ammoudara',
+  // Germany
+  'Berlin', 'Hamburg', 'Munich', 'Cologne', 'Frankfurt',
+  // France
+  'Paris', 'Lyon', 'Marseille', 'Nice',
+  // UK
+  'London', 'Manchester', 'Bristol', 'Glasgow',
+  // Netherlands
+  'Amsterdam', 'Rotterdam', 'Utrecht',
+  // UAE
+  'Dubai', 'Abu Dhabi',
+  // Spain
+  'Barcelona', 'Madrid', 'Ibiza',
+  // Italy
+  'Milan', 'Rome', 'Naples', 'Florence',
+  // Sardinia
+  'Sardinia', 'Cagliari', 'Olbia', 'Porto Cervo', 'Sassari', 'Alghero', 'La Maddalena',
+  // Portugal
+  'Lisbon', 'Porto',
+  // Greece — Crete
+  'Chania', 'Heraklion', 'Hersonissos', 'Malia', 'Rethymno',
+  'Agios Nikolaos', 'Elounda', 'Makrigialos', 'Ammoudara',
   'Other',
 ] as const
 export type City = (typeof CITIES)[number] | (string & {})

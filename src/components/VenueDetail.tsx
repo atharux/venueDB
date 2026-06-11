@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Venue, Tag } from '../types'
-import { CITIES, CATEGORIES, STATUSES, STATUS_LABEL, TAGS } from '../types'
+import { CATEGORIES, STATUSES, STATUS_LABEL, TAGS } from '../types'
 import { facebookUrl, instagramUrl, websiteUrl } from '../outreach'
 import { ScrapeButton } from './ScrapeButton'
 import { enrichLead, scraperEnabled } from '../scraper'
@@ -188,13 +188,15 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
         </Field>
         <div className="field-row">
           <Field label="City">
-            <select value={venue.city} onChange={e => set('city', e.target.value as Venue['city'])}>
-              {CITIES.map(c => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <input
+              list="cities-datalist"
+              value={venue.city}
+              placeholder="e.g. Berlin"
+              onChange={e => {
+                const v = e.target.value.replace(/\b\w/g, c => c.toUpperCase())
+                set('city', v as Venue['city'])
+              }}
+            />
           </Field>
           <Field label="District">
             <input

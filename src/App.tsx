@@ -15,6 +15,7 @@ import type { BrandTheme } from './components/SettingsModal'
 import { AboutModal } from './components/AboutModal'
 import { exportJson, exportCsv, resetLocalToSeed } from './storage'
 import { scraperEnabled } from './scraper'
+import { CITIES } from './types'
 import type { City, Category, OutreachStatus, Tag, Venue } from './types'
 import './App.css'
 
@@ -369,6 +370,11 @@ export default function App() {
       {migrationOpen && <MigrationGuide onClose={() => setMigrationOpen(false)} />}
       {settingsOpen && <SettingsModal brand={brand} onBrandChange={setBrand} onClose={() => setSettingsOpen(false)} />}
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
+
+      {/* Global city datalist — always in DOM so any input[list="cities-datalist"] works */}
+      <datalist id="cities-datalist">
+        {CITIES.map(c => <option key={c} value={c} />)}
+      </datalist>
     </div>
   )
 }

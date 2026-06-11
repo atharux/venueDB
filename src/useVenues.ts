@@ -1,6 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Venue, VenueDraft } from './types'
+import type { City, Venue, VenueDraft } from './types'
 import { clearInvalidPhones, deleteDuplicateVenues, listVenues, removeVenue, restoreSeedVenues, saveVenue, storageMode } from './storage'
+
+/**
+ * Clean a draft or patch before it touches the database.
+ * Runs on every add() and update() — a single enforcement point so no
+ * call site needs to remember to sanitise.
+ */
+function normalise(d: Partial<Venue>): Partial<Venue> {
+  const out: Partial<Venue> = { ...d }
+  // Trim all plain strings
+  if (typeof out.name     === 'string') out.name     = out.name.trim()
+  if (typeof out.district === 'string') out.district = out.district.trim() || undefined
+  if (typeof out.notes    === 'string') out.notes    = out.notes.trim()    || undefined
+  if (typeof out.phone    === 'string') out.phone    = out.phone.trim()    || undefined
+  // City: trim + title-case ("sardinia" → "Sardinia", "PORTO CERVO" → "Porto Cervo")
+  if (typeof out.city === 'string') {
+    const c = out.city.trim().replace(/\b\w/g, ch => ch.toUpperCase())
+    out.city = (c || out.city) as City
+  }
+  // Email: trim + lowercase
+  if (typeof out.email === 'string')
+    out.email = out.email.trim().toLowerCase() || undefined
+  // Instagram: strip leading @, trim, lowercase
+  if (typeof out.instagram === 'string')
+    out.instagram = out.instagram.trim().replace(/^@+/, '').toLowerCase() || undefined
+  // Website: trim + ensure scheme present
+  if (typeof out.website === 'string') {
+    const w = out.website.trim()
+    out.website = w ? (w.startsWith('http') ? w : `https://${w}`) : undefined
+  }
+  return out
+}
 
 function newId() {
   return (
@@ -66,7 +97,7 @@ export function useVenues() {
         id: newId(),
         created_at: now,
         updated_at: now,
-        ...draft,
+        ...(normalise(draft) as VenueDraft),
       }
       await upsert(venue)
       setRecentlyAddedIds(prev => new Set([...prev, venue.id]))
@@ -90,7 +121,7 @@ export function useVenues() {
       if (!existing) return
       const next: Venue = {
         ...existing,
-        ...patch,
+        ...normalise(patch),
         id,
         updated_at: new Date().toISOString(),
       }

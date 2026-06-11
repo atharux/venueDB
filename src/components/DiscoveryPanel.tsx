@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { City, Category, Tag, Venue, VenueDraft } from '../types'
-import { CITIES, CATEGORIES } from '../types'
+import { CATEGORIES } from '../types'
 import {
   SEARCH_LAUNCHERS,
   enrichLead,
@@ -1332,9 +1332,6 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
 
       </div>
 
-      <datalist id="cities-datalist">
-        {CITIES.map(c => <option key={c} value={c} />)}
-      </datalist>
     </section>
   )
 }
