@@ -3210,9 +3210,9 @@ details[open].discover-advanced > summary::before {
   --bg-elev: #12101e;
   --bg-elev-2: #1c1830;
   --text-h: #f5f0ff;
-  --text: #cdc6e0;
-  --text-muted: #8880a0;
-  --text-faint: #5a5470;
+  --text: #ddd8f0;
+  --text-muted: #bbb2d4;
+  --text-faint: #9088a8;
   --border: #2a2540;
   --border-strong: #453d60;
   --accent: #d6365a;
@@ -3224,6 +3224,50 @@ details[open].discover-advanced > summary::before {
   --warn: #f59e0b;
   --err: #ff4560;
   color-scheme: dark;
+}
+
+/* Table row states — replace default green tints */
+.brand-hydrat3 tbody tr:hover {
+  background: rgba(214, 54, 90, 0.07);
+}
+
+.brand-hydrat3 tbody tr.selected {
+  background: rgba(214, 54, 90, 0.14);
+}
+
+/* Column chip active state — replace hardcoded green */
+.brand-hydrat3 .column-chip.active {
+  background: rgba(214, 54, 90, 0.18);
+  color: #f5f0ff;
+  border-color: rgba(214, 54, 90, 0.45);
+}
+
+/* Status chips — fix colours that were tuned for the light default theme */
+.brand-hydrat3 .status-researching {
+  background: rgba(0, 180, 220, 0.12);
+  color: #70c8e8;
+}
+
+.brand-hydrat3 .status-contacted {
+  background: rgba(214, 54, 90, 0.12);
+  color: #f07090;
+}
+
+.brand-hydrat3 .status-in_conversation {
+  background: rgba(0, 212, 170, 0.10);
+  color: #00d4aa;
+}
+
+.brand-hydrat3 .status-meeting_booked {
+  background: rgba(0, 212, 170, 0.18);
+  color: #00e8bc;
+}
+
+/* Outreach panel gradient — replace default green tint */
+.brand-hydrat3 .outreach-panel {
+  background:
+    linear-gradient(180deg, rgba(214, 54, 90, 0.05), transparent 100%),
+    var(--bg-elev-2);
 }
 
 /* ─── About modal ─────────────────────────────────────────────────────────── */
