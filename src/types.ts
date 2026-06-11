@@ -70,6 +70,16 @@ export const CITY_TO_REGION: Record<string, string> = {
   // Italy
   Milan: 'Italy',
   Rome: 'Italy',
+  Naples: 'Italy',
+  Florence: 'Italy',
+  // Sardinia (treated as its own market like Crete)
+  Sardinia: 'Sardinia',
+  Cagliari: 'Sardinia',
+  Olbia: 'Sardinia',
+  'Porto Cervo': 'Sardinia',
+  Sassari: 'Sardinia',
+  Alghero: 'Sardinia',
+  'La Maddalena': 'Sardinia',
   // Portugal
   Lisbon: 'Portugal',
   Porto: 'Portugal',

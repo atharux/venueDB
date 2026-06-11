@@ -14,6 +14,7 @@ interface Props {
     tag?: Tag | ''
     region?: string | ''
   }
+  recentlyAddedIds?: Set<string>
 }
 
 type SortKey = 'name' | 'city' | 'region' | 'category' | 'status' | 'luxury' | 'updated'
@@ -123,7 +124,7 @@ const BUILTIN_COLUMNS: BuiltInColumn[] = [
 
 const BUILTIN_BY_KEY = new Map(BUILTIN_COLUMNS.map(c => [c.key, c]))
 
-export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Props) {
+export function VenueTable({ venues, selectedId, onSelect, initialFilters, recentlyAddedIds }: Props) {
   const [query, setQuery] = useState('')
   const [cityFilter, setCityFilter] = useState<City | ''>(initialFilters?.city ?? '')
   const [regionFilter, setRegionFilter] = useState<string | ''>(initialFilters?.region ?? '')
@@ -220,6 +221,11 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
     })
 
     out.sort((a, b) => {
+      // Recently added always float to top, regardless of active sort
+      const aNew = recentlyAddedIds?.has(a.id) ? 0 : 1
+      const bNew = recentlyAddedIds?.has(b.id) ? 0 : 1
+      if (aNew !== bNew) return aNew - bNew
+
       const dir = sortDir === 'asc' ? 1 : -1
       switch (sortKey) {
         case 'name':
@@ -239,7 +245,7 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
       }
     })
     return out
-  }, [venues, query, cityFilter, regionFilter, categoryFilter, statusFilter, tagFilter, hasContactOnly, sortKey, sortDir])
+  }, [venues, query, cityFilter, regionFilter, categoryFilter, statusFilter, tagFilter, hasContactOnly, sortKey, sortDir, recentlyAddedIds])
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -404,7 +410,10 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters }: Pro
               <tr
                 key={v.id}
                 onClick={() => onSelect(v.id)}
-                className={selectedId === v.id ? 'selected' : ''}
+                className={[
+                  selectedId === v.id ? 'selected' : '',
+                  recentlyAddedIds?.has(v.id) ? 'is-new' : '',
+                ].filter(Boolean).join(' ')}
               >
                 <td className="cell-name">
                   <div className="cell-name-main">{v.name}</div>

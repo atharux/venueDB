@@ -13,6 +13,8 @@ export function useVenues() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const venuesRef = useRef<Venue[]>([])
+  const [recentlyAddedIds, setRecentlyAddedIds] = useState<Set<string>>(new Set())
+  const recentTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   useEffect(() => {
     venuesRef.current = venues
@@ -67,6 +69,16 @@ export function useVenues() {
         ...draft,
       }
       await upsert(venue)
+      setRecentlyAddedIds(prev => new Set([...prev, venue.id]))
+      const timer = setTimeout(() => {
+        setRecentlyAddedIds(prev => {
+          const next = new Set(prev)
+          next.delete(venue.id)
+          return next
+        })
+        recentTimers.current.delete(venue.id)
+      }, 20000)
+      recentTimers.current.set(venue.id, timer)
       return venue
     },
     [upsert],
@@ -138,5 +150,5 @@ export function useVenues() {
     }
   }, [])
 
-  return { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, cleanupPhones, storageMode }
+  return { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, cleanupPhones, storageMode, recentlyAddedIds }
 }

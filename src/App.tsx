@@ -35,7 +35,7 @@ function entityOf(v: Venue): EntityType {
 }
 
 export default function App() {
-  const { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, cleanupPhones, storageMode } = useVenues()
+  const { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, cleanupPhones, storageMode, recentlyAddedIds } = useVenues()
   const [tab, setTab] = useState<TabId>('venues')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tableFilters, setTableFilters] = useState<TableFilters | undefined>(undefined)
@@ -271,6 +271,7 @@ export default function App() {
                 selectedId={selectedId}
                 onSelect={setSelectedId}
                 initialFilters={tableFilters}
+                recentlyAddedIds={recentlyAddedIds}
               />
             </>
           ) : null}

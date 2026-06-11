@@ -47,6 +47,7 @@ const MAPS_VENUE_TYPES = [
 const OSM_CATEGORIES = ['nightclub', 'bar', 'bar with djs', 'beach club', 'live music venue', 'event space']
 
 const PLACES_TYPE_TO_CATEGORY: Record<string, string> = {
+  // Google Maps Places API format (underscored)
   night_club: 'Nightclub',
   bar: 'Bar with DJs',
   beach_bar: 'Beach Club',
@@ -54,6 +55,18 @@ const PLACES_TYPE_TO_CATEGORY: Record<string, string> = {
   restaurant: 'Restaurant',
   music_venue: 'Live Music Venue',
   event_venue: 'Event Space',
+  // OSM / Overpass format (spaced) — must be listed separately or OSM
+  // results fall through to 'Other' because the keys never match
+  nightclub: 'Nightclub',
+  'bar with djs': 'Bar with DJs',
+  'beach club': 'Beach Club',
+  'live music venue': 'Live Music Venue',
+  'event space': 'Event Space',
+}
+
+/** Capitalize each word — normalises free-form location input ("sardinia" → "Sardinia"). */
+function toTitleCase(s: string): string {
+  return s.replace(/\b\w/g, c => c.toUpperCase())
 }
 
 export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, defaultEntityType = 'venue' }: Props) {
@@ -269,7 +282,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
   const addSelectedFromScan = async (visible: RegionScanResult[]) => {
     const toAdd = visible.filter(r => selectedScanUrls.has(r.url))
     if (toAdd.length === 0) return
-    const inferredCity = (sharedLocation.split(',')[0]?.trim() || sharedLocation) as City
+    const inferredCity = toTitleCase(sharedLocation.split(',')[0]?.trim() || sharedLocation) as City
     setAddingFromScan(true)
     for (const [i, result] of toAdd.entries()) {
       setAddScanProgress(`Scraping ${i + 1}/${toAdd.length}: ${result.title || result.url}`)
@@ -344,7 +357,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
   const addSelectedFromMaps = async () => {
     const toAdd = mapsResults.filter(r => selectedMapsIds.has(r.place_id))
     if (toAdd.length === 0) return
-    const inferredCity = (mapsLocation.split(',')[0]?.trim() || mapsLocation) as City
+    const inferredCity = toTitleCase(mapsLocation.split(',')[0]?.trim() || mapsLocation) as City
     setAddingFromMaps(true)
     for (const [i, place] of toAdd.entries()) {
       setAddMapsProgress(`Adding ${i + 1}/${toAdd.length}: ${place.name}`)
@@ -407,7 +420,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
   const addSelectedFromOsm = async () => {
     const toAdd = osmResults.filter(r => selectedOsmIds.has(r.osm_id))
     if (toAdd.length === 0) return
-    const inferredCity = (sharedLocation.split(',')[0]?.trim() || sharedLocation) as City
+    const inferredCity = toTitleCase(sharedLocation.split(',')[0]?.trim() || sharedLocation) as City
     setAddingFromOsm(true)
     for (const [i, venue] of toAdd.entries()) {
       setAddOsmProgress(`Adding ${i + 1}/${toAdd.length}: ${venue.name}`)
@@ -672,9 +685,9 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
                     </li>
                   ))}
                 </ul>
+                {addOsmProgress ? <div className="muted small scan-done-msg">{addOsmProgress}</div> : null}
                 {selectedOsmIds.size > 0 ? (
                   <div className="scan-add-bar">
-                    {addOsmProgress ? <span className="muted small">{addOsmProgress}</span> : null}
                     <button className="primary-btn" onClick={() => void addSelectedFromOsm()} disabled={addingFromOsm}>
                       {addingFromOsm ? 'Adding…' : `Add ${selectedOsmIds.size} venue${selectedOsmIds.size !== 1 ? 's' : ''}`}
                     </button>
@@ -863,9 +876,9 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
                           <li className="muted small">No results match this filter.</li>
                         ) : null}
                       </ul>
+                      {addScanProgress ? <div className="muted small scan-done-msg">{addScanProgress}</div> : null}
                       {selectedScanUrls.size > 0 ? (
                         <div className="scan-add-bar">
-                          {addScanProgress ? <span className="muted small">{addScanProgress}</span> : null}
                           <button
                             className="primary-btn"
                             onClick={() => void addSelectedFromScan(visible)}

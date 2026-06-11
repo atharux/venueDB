@@ -3203,6 +3203,32 @@ details[open].discover-advanced > summary::before {
   color: var(--text);
 }
 
+/* ─── Newly added row highlight ───────────────────────────────────────────── */
+
+@keyframes row-flash {
+  0%   { background: var(--accent-bg); box-shadow: inset 3px 0 0 var(--accent); }
+  60%  { background: var(--accent-bg); box-shadow: inset 3px 0 0 var(--accent); }
+  100% { background: transparent;      box-shadow: none; }
+}
+
+tbody tr.is-new {
+  animation: row-flash 3s ease-out forwards;
+}
+
+tbody tr.is-new.selected {
+  animation: none;
+  background: rgba(65, 95, 52, 0.12);
+}
+
+.brand-hydrat3 tbody tr.is-new.selected {
+  animation: none;
+  background: rgba(214, 54, 90, 0.14);
+}
+
+.scan-done-msg {
+  padding: 6px 0 2px;
+}
+
 /* ─── Hydrat3 brand theme ─────────────────────────────────────────────────── */
 
 .brand-hydrat3 {
