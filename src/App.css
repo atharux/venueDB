@@ -918,7 +918,7 @@ tbody td {
    ========================================================= */
 
 .outreach-panel {
-  padding: 16px 20px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   background:
     linear-gradient(180deg, rgba(24, 34, 26, 0.05), transparent 100%),
@@ -929,8 +929,8 @@ tbody td {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 12px;
-  gap: 12px;
+  margin-bottom: 8px;
+  gap: 8px;
 }
 
 .outreach-panel h3 {
@@ -1215,7 +1215,7 @@ tbody td {
 
 .template-preview {
   width: 100%;
-  margin: 12px 0;
+  margin: 6px 0;
 }
 
 .channel-btn {
@@ -1798,8 +1798,8 @@ tbody td {
 
 /* Explicit mark-contacted row, decoupled from channel link clicks */
 .mark-contacted-row {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 6px;
+  padding-top: 8px;
   border-top: 1px dashed var(--border);
 }
 .mark-contacted-btn {

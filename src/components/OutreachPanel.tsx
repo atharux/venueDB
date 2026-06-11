@@ -93,7 +93,7 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
       <div className="template-preview-label">Message preview — read only · use Copy or channel buttons below to send</div>
       <textarea
         className="template-preview"
-        rows={message.includes('\n') ? 10 : 4}
+        rows={message.includes('\n') ? 5 : 3}
         value={message}
         readOnly
         title="Auto-generated from template. Use Copy message to send via your preferred channel."
