@@ -13,7 +13,8 @@ function normalise(d: Partial<Venue>): Partial<Venue> {
   if (typeof out.name     === 'string') out.name     = out.name.trim()
   if (typeof out.district === 'string') out.district = out.district.trim() || undefined
   if (typeof out.notes    === 'string') out.notes    = out.notes.trim()    || undefined
-  if (typeof out.phone    === 'string') out.phone    = out.phone.trim()    || undefined
+  if (typeof out.phone       === 'string') out.phone       = out.phone.trim()       || undefined
+  if (typeof out.verified_by === 'string') out.verified_by = out.verified_by.trim() || undefined
   // City: trim + title-case ("sardinia" → "Sardinia", "PORTO CERVO" → "Porto Cervo")
   if (typeof out.city === 'string') {
     const c = out.city.trim().replace(/\b\w/g, ch => ch.toUpperCase())

@@ -3167,6 +3167,28 @@ details[open].discover-advanced > summary::before {
   color: var(--accent);
 }
 
+.verify-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.verifier-name-input {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  width: 9rem;
+}
+
+.verifier-name-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* =========================================================
    USABILITY SIGNIFIERS — walkthrough audit fixes
    ========================================================= */

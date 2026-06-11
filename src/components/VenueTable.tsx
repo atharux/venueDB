@@ -134,8 +134,9 @@ const BUILTIN_COLUMNS: BuiltInColumn[] = [
       const s = verifiedStatus(v)
       if (s === 'unverified') return <span className="verified-badge is-unverified">—</span>
       const date = v.last_verified!.slice(0, 10)
+      const tip = v.verified_by ? `Verified by ${v.verified_by}` : date
       return (
-        <span className={`verified-badge is-${s}`}>
+        <span className={`verified-badge is-${s}`} title={tip}>
           {s === 'verified' ? `✓ ${date}` : `⚠ ${date}`}
         </span>
       )

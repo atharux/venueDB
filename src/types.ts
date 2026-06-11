@@ -222,6 +222,7 @@ export interface Venue {
   notes?: string
   last_contacted?: string // ISO date
   last_verified?: string  // ISO date — when a human last confirmed this record is accurate
+  verified_by?: string    // freetext name of who verified it
   status: OutreachStatus
   tags: Tag[]
   source?: string // where this venue was discovered

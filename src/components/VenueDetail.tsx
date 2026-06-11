@@ -18,6 +18,9 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
   const [showRawJson, setShowRawJson] = useState(false)
   const [enriching, setEnriching] = useState(false)
   const [enrichNote, setEnrichNote] = useState<string | null>(null)
+  const [verifierName, setVerifierName] = useState(
+    () => localStorage.getItem('venue-intel-verifier-v1') ?? ''
+  )
 
   const handleEnrich = async () => {
     setEnriching(true)
@@ -417,22 +420,39 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
         <div className="verified-row">
           {(() => {
             const vs = verifiedStatus(venue)
+            const by = venue.verified_by ? ` by ${venue.verified_by}` : ''
+            const date = venue.last_verified?.slice(0, 10) ?? ''
             return (
               <span className={`verified-badge is-${vs}`}>
                 {vs === 'verified'
-                  ? `✓ Verified ${venue.last_verified!.slice(0, 10)}`
+                  ? `✓ Verified${by} · ${date}`
                   : vs === 'stale'
-                    ? `⚠ Stale — last verified ${venue.last_verified!.slice(0, 10)}`
-                    : 'Unverified — data accuracy unknown'}
+                    ? `⚠ Stale${by} · ${date}`
+                    : 'Unverified'}
               </span>
             )
           })()}
-          <button
-            className="verify-btn"
-            onClick={() => set('last_verified', new Date().toISOString())}
-          >
-            Mark as verified
-          </button>
+          <div className="verify-action-row">
+            <input
+              className="verifier-name-input"
+              value={verifierName}
+              placeholder="Your name…"
+              onChange={e => {
+                setVerifierName(e.target.value)
+                localStorage.setItem('venue-intel-verifier-v1', e.target.value)
+              }}
+            />
+            <button
+              className="verify-btn"
+              onClick={() => {
+                const patch: Partial<Venue> = { last_verified: new Date().toISOString() }
+                if (verifierName.trim()) patch.verified_by = verifierName.trim()
+                onUpdate(venue.id, patch)
+              }}
+            >
+              Mark as verified
+            </button>
+          </div>
         </div>
       </section>
 
