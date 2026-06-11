@@ -3238,6 +3238,10 @@ details[open].discover-advanced > summary::before {
 /* Header — replace parchment bg */
 .brand-hydrat3 .app-header {
   background: rgba(18, 16, 30, 0.96);
+  box-shadow:
+    0 1px 0 var(--border-strong),
+    0 8px 32px rgba(214, 54, 90, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.45);
 }
 
 /* Brand mark — replace forest green with accent */
@@ -3367,6 +3371,16 @@ details[open].discover-advanced > summary::before {
 .brand-hydrat3 .status-meeting_booked {
   background: rgba(0, 212, 170, 0.18);
   color: #00e8bc;
+}
+
+/* Festival accent palette — bright purples for dark bg legibility.
+   .app.brand-hydrat3 has specificity (0,2,0) > :root (0,1,0) so these win. */
+.app.brand-hydrat3 {
+  --festival-accent:        #b060e8;
+  --festival-accent-strong: #9b4dca;
+  --festival-accent-bg:     rgba(176, 96, 232, 0.16);
+  --festival-accent-border: rgba(176, 96, 232, 0.38);
+  --festival-ink:           #f5efff;
 }
 
 /* Outreach panel gradient — replace default green tint */
