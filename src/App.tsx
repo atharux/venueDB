@@ -1,4 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
+import { isDemoMode, APP_PASSCODE } from './config'
+import { AccessGate, isAccessGranted } from './components/AccessGate'
 import { useVenues } from './useVenues'
 import { Dashboard } from './components/Dashboard'
 import { VenueTable } from './components/VenueTable'
@@ -37,6 +39,17 @@ function entityOf(v: Venue): EntityType {
 }
 
 export default function App() {
+  const [accessGranted, setAccessGranted] = useState(() => isDemoMode || isAccessGranted())
+
+  // Gate: show passcode screen if VITE_APP_PASSCODE is set and not yet cleared
+  if (!accessGranted && APP_PASSCODE) {
+    return <AccessGate onGranted={() => setAccessGranted(true)} />
+  }
+
+  return <AppInner />
+}
+
+function AppInner() {
   const { venues, loading, error, add, update, remove, cleanupDuplicates, cleanupPhones, normaliseAll, storageMode, recentlyAddedIds } = useVenues()
   const [tab, setTab] = useState<TabId>('venues')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -270,6 +283,27 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {isDemoMode && (
+        <div style={{
+          padding: '0.45rem 1.25rem',
+          background: 'rgba(6,182,212,0.07)',
+          borderBottom: '1px solid rgba(6,182,212,0.18)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: '0.75rem', flexWrap: 'wrap',
+          fontFamily: 'Space Mono, monospace', fontSize: '0.65rem',
+        }}>
+          <span style={{ color: '#67e8f9' }}>
+            ◉ DEMO MODE — seed data only, changes are browser-local, Supabase is not connected
+          </span>
+          <a
+            href={window.location.pathname}
+            style={{ color: '#475569', textDecoration: 'none', borderBottom: '1px solid #374151', paddingBottom: 1 }}
+          >
+            exit demo
+          </a>
+        </div>
+      )}
 
       {error ? <div className="banner error-banner">{error}</div> : null}
       {loading ? <div className="banner">Loading venues…</div> : null}

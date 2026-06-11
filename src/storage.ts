@@ -7,6 +7,7 @@
 import type { Venue } from './types'
 import { SEED_VENUES, SEED_VERSION } from './seed'
 import { isLikelyPhone, normalizePhone } from './phone'
+import { isDemoMode } from './config'
 
 const LS_KEY = 'crete-nightlife-venues-v1'
 const LS_VERSION_KEY = 'crete-nightlife-seed-version'
@@ -15,7 +16,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
 export const storageMode: 'supabase' | 'localStorage' =
-  SUPABASE_URL && SUPABASE_ANON_KEY ? 'supabase' : 'localStorage'
+  !isDemoMode && SUPABASE_URL && SUPABASE_ANON_KEY ? 'supabase' : 'localStorage'
 
 // ---------- localStorage adapter ----------
 
