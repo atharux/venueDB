@@ -14,7 +14,7 @@ import { SettingsModal, loadBrandTheme } from './components/SettingsModal'
 import type { BrandTheme } from './components/SettingsModal'
 import { AboutModal } from './components/AboutModal'
 import { RegionAuditModal } from './components/RegionAuditModal'
-import { exportJson, exportCsv, resetLocalToSeed } from './storage'
+import { exportJson, exportCsv } from './storage'
 import { scraperEnabled } from './scraper'
 import { CITIES } from './types'
 import type { City, Category, OutreachStatus, Tag, Venue } from './types'
@@ -37,7 +37,7 @@ function entityOf(v: Venue): EntityType {
 }
 
 export default function App() {
-  const { venues, loading, error, add, update, remove, restoreSeed, cleanupDuplicates, cleanupPhones, normaliseAll, storageMode, recentlyAddedIds } = useVenues()
+  const { venues, loading, error, add, update, remove, cleanupDuplicates, cleanupPhones, normaliseAll, storageMode, recentlyAddedIds } = useVenues()
   const [tab, setTab] = useState<TabId>('venues')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tableFilters, setTableFilters] = useState<TableFilters | undefined>(undefined)
@@ -202,24 +202,6 @@ export default function App() {
                   ⬇ Download JSON
                 </button>
                 <div className="dropdown-divider" />
-                <button
-                  role="menuitem"
-                  onClick={() => {
-                    setActionsOpen(false)
-                    if (storageMode === 'localStorage') {
-                      if (confirm('Reset local data and restore the default seed roster?')) {
-                        resetLocalToSeed()
-                        void restoreSeed().then(() => window.location.reload())
-                      }
-                      return
-                    }
-                    if (confirm('Restore the default seed roster into the current database? Existing records will be kept.')) {
-                      void restoreSeed()
-                    }
-                  }}
-                >
-                  Restore seed roster
-                </button>
                 <button
                   role="menuitem"
                   onClick={() => {
