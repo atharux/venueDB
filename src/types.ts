@@ -314,6 +314,7 @@ export const CITY_TO_REGION: Record<string, string> = {
   'A CoruñA, Galicia': 'Spain',   // raw DB value — fixed by normalise-all
   'San Antonio': 'Spain',
   "Playa D'En Bossa": 'Spain',
+  "Playa D'en Bossa": 'Spain',
   'Ibiza Town': 'Spain',
   'San Rafael': 'Spain',
   'Cap Martinet': 'Spain',
@@ -324,6 +325,7 @@ export const CITY_TO_REGION: Record<string, string> = {
   'San José Hillside': 'Spain',
   'San Carlos': 'Spain',
   "Playa D'En Bossa Strip": 'Spain',
+  "Playa D'en Bossa Strip": 'Spain',
   'DC-10': 'Spain',
   'Near Airport': 'Spain',
   'Barcelona (Poble Espanyol)': 'Spain',
