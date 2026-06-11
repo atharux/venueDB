@@ -297,10 +297,10 @@ function AppInner() {
             ◉ DEMO MODE — seed data only, changes are browser-local, Supabase is not connected
           </span>
           <a
-            href={window.location.pathname}
+            href="mailto:athar@atharux.com?subject=Venue Intelligence access request"
             style={{ color: '#475569', textDecoration: 'none', borderBottom: '1px solid #374151', paddingBottom: 1 }}
           >
-            exit demo
+            request full access →
           </a>
         </div>
       )}
