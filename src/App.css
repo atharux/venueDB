@@ -3117,22 +3117,57 @@ details[open].discover-advanced > summary::before {
 
 /* ── Active filter indicator (VenueTable) ────────────────── */
 
+/* Active state for filter controls — accent border + tint when non-default */
+select.filter-on,
+input[type="search"].filter-on {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+
+.toggle.filter-on {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+
+/* Filter chip bar — individual labelled pills, one per active filter */
 .filters-active-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius-sm);
+  gap: 6px;
+  padding: 4px 0;
   font-family: var(--mono);
   font-size: 0.7rem;
 }
 
-.filters-active-label {
-  color: var(--accent);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 10px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.filter-chip:hover {
+  background: var(--accent-border);
+  border-color: var(--accent);
+  color: var(--text-h);
+}
+
+.filter-chip-remove {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
 }
 
 .filters-clear-btn {

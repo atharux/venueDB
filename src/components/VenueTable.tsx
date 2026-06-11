@@ -268,47 +268,57 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
           onChange={e => setQuery(e.target.value)}
           className="search-input"
         />
-        <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)}>
+        <select
+          className={regionFilter ? 'filter-on' : ''}
+          value={regionFilter}
+          onChange={e => setRegionFilter(e.target.value)}
+        >
           <option value="">All regions</option>
           {REGIONS.map(r => (
-            <option key={r} value={r}>
-              {r}
-            </option>
+            <option key={r} value={r}>{r}</option>
           ))}
         </select>
-        <select value={cityFilter} onChange={e => setCityFilter(e.target.value as City | '')}>
+        <select
+          className={cityFilter ? 'filter-on' : ''}
+          value={cityFilter}
+          onChange={e => setCityFilter(e.target.value as City | '')}
+        >
           <option value="">All cities</option>
           {CITIES.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
+            <option key={c} value={c}>{c}</option>
           ))}
         </select>
-        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value as Category | '')}>
+        <select
+          className={categoryFilter ? 'filter-on' : ''}
+          value={categoryFilter}
+          onChange={e => setCategoryFilter(e.target.value as Category | '')}
+        >
           <option value="">All categories</option>
           {CATEGORIES.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
+            <option key={c} value={c}>{c}</option>
           ))}
         </select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as OutreachStatus | '')}>
+        <select
+          className={statusFilter ? 'filter-on' : ''}
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value as OutreachStatus | '')}
+        >
           <option value="">All statuses</option>
           {STATUSES.map(s => (
-            <option key={s} value={s}>
-              {STATUS_LABEL[s]}
-            </option>
+            <option key={s} value={s}>{STATUS_LABEL[s]}</option>
           ))}
         </select>
-        <select value={tagFilter} onChange={e => setTagFilter(e.target.value as Tag | '')}>
+        <select
+          className={tagFilter ? 'filter-on' : ''}
+          value={tagFilter}
+          onChange={e => setTagFilter(e.target.value as Tag | '')}
+        >
           <option value="">All tags</option>
           {TAGS.map(t => (
-            <option key={t} value={t}>
-              {t}
-            </option>
+            <option key={t} value={t}>{t}</option>
           ))}
         </select>
-        <label className="toggle">
+        <label className={`toggle ${hasContactOnly ? 'filter-on' : ''}`}>
           <input
             type="checkbox"
             checked={hasContactOnly}
@@ -366,25 +376,39 @@ export function VenueTable({ venues, selectedId, onSelect, initialFilters, recen
         <div className="results-count">
           {filtered.length} of {venues.length}
         </div>
-        {(cityFilter || regionFilter || categoryFilter || statusFilter || tagFilter || hasContactOnly || query) ? (
-          <div className="filters-active-bar">
-            <span className="filters-active-label">Filters active</span>
-            <button
-              className="link-btn filters-clear-btn"
-              onClick={() => {
-                setQuery('')
-                setCityFilter('')
-                setRegionFilter('')
-                setCategoryFilter('')
-                setStatusFilter('')
-                setTagFilter('')
-                setHasContactOnly(false)
-              }}
-            >
-              Clear all ×
-            </button>
-          </div>
-        ) : null}
+        {(() => {
+          const chips: Array<{ label: string; clear: () => void }> = [
+            ...(query        ? [{ label: `Search: "${query.length > 18 ? query.slice(0, 18) + '…' : query}"`, clear: () => setQuery('') }] : []),
+            ...(regionFilter   ? [{ label: `Region: ${regionFilter}`,                     clear: () => setRegionFilter('') }] : []),
+            ...(cityFilter     ? [{ label: `City: ${cityFilter}`,                          clear: () => setCityFilter('') }] : []),
+            ...(categoryFilter ? [{ label: `Category: ${categoryFilter}`,                  clear: () => setCategoryFilter('') }] : []),
+            ...(statusFilter   ? [{ label: `Status: ${STATUS_LABEL[statusFilter]}`,        clear: () => setStatusFilter('') }] : []),
+            ...(tagFilter      ? [{ label: `Tag: ${tagFilter}`,                            clear: () => setTagFilter('') }] : []),
+            ...(hasContactOnly ? [{ label: 'Reachable only',                               clear: () => setHasContactOnly(false) }] : []),
+          ]
+          if (chips.length === 0) return null
+          return (
+            <div className="filters-active-bar">
+              {chips.map(chip => (
+                <button key={chip.label} className="filter-chip" onClick={chip.clear}>
+                  {chip.label} <span className="filter-chip-remove">×</span>
+                </button>
+              ))}
+              {chips.length > 1 ? (
+                <button
+                  className="link-btn filters-clear-btn"
+                  onClick={() => {
+                    setQuery(''); setCityFilter(''); setRegionFilter('')
+                    setCategoryFilter(''); setStatusFilter(''); setTagFilter('')
+                    setHasContactOnly(false)
+                  }}
+                >
+                  Clear all
+                </button>
+              ) : null}
+            </div>
+          )
+        })()}
       </div>
 
       <div className="table-wrap">
