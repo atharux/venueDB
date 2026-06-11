@@ -639,16 +639,21 @@ a:hover {
 }
 
 .stat {
-  background: var(--bg-elev);
-  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
   border-radius: var(--radius);
   padding: 16px;
-  box-shadow: var(--shadow-sm);
+  box-shadow:
+    0 -2px 10px rgba(65, 95, 52, 0.10),
+    0 1px 4px rgba(65, 95, 52, 0.05);
 }
 
 .stat.positive {
-  border-color: rgba(15, 159, 110, 0.22);
-  background: rgba(15, 159, 110, 0.04);
+  border-top-color: var(--ok);
+  box-shadow:
+    0 -2px 12px rgba(64, 111, 77, 0.18),
+    0 1px 4px rgba(64, 111, 77, 0.06);
 }
 
 .stat-value {
@@ -681,11 +686,12 @@ a:hover {
 }
 
 .card {
-  background: var(--bg-elev);
-  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--accent-border);
   border-radius: var(--radius);
   padding: 16px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 -2px 8px rgba(65, 95, 52, 0.07);
 }
 
 .card h3 {
@@ -1028,9 +1034,9 @@ tbody td {
 }
 
 .detail-hero {
-  background:
-    linear-gradient(135deg, rgba(24, 34, 26, 0.08), rgba(217, 143, 25, 0.1)),
-    var(--bg-elev);
+  background: var(--bg);
+  border-top: 2px solid var(--accent-border);
+  box-shadow: 0 -2px 10px rgba(65, 95, 52, 0.08);
 }
 
 .detail-stats-grid {
@@ -1528,7 +1534,8 @@ tbody td {
 
 .bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(65, 95, 52, 0.35);
 }
 
 /* =========================================================
@@ -3519,11 +3526,11 @@ tbody tr.is-new.selected {
   border-color: var(--border);
 }
 
-/* Detail hero gradient — replace warm green/amber tints */
+/* Detail hero — flat with pink glow line */
 .brand-hydrat3 .detail-hero {
-  background:
-    linear-gradient(135deg, rgba(214, 54, 90, 0.08), rgba(0, 212, 170, 0.05)),
-    var(--bg-elev);
+  background: var(--bg-elev);
+  border-top: 2px solid rgba(214, 54, 90, 0.4);
+  box-shadow: 0 -2px 10px rgba(214, 54, 90, 0.12);
 }
 
 /* ProGate overlay — replace parchment fog */
