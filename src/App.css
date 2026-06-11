@@ -3144,9 +3144,9 @@ details[open].discover-advanced > summary::before {
 }
 
 .verified-badge.is-unverified {
-  color: var(--text-muted);
-  border-color: var(--border);
-  background: transparent;
+  color: #f59e0b;
+  border-color: rgba(245,158,11,0.3);
+  background: rgba(245,158,11,0.06);
 }
 
 .verify-btn {
@@ -3165,6 +3165,49 @@ details[open].discover-advanced > summary::before {
   border-color: var(--accent);
   background: var(--accent-bg);
   color: var(--accent);
+}
+
+/* ── Record health nudge banner (VenueDetail) ─────────────── */
+.record-health-nudge {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1rem;
+  background: rgba(245,158,11,0.06);
+  border-left: 3px solid #f59e0b;
+  flex-wrap: wrap;
+}
+
+.record-health-icon {
+  color: #f59e0b;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.record-health-label {
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #d97706;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.record-health-gaps {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.record-health-gap {
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  background: rgba(245,158,11,0.12);
+  color: #d97706;
+  border: 1px solid rgba(245,158,11,0.28);
 }
 
 .verify-action-row {

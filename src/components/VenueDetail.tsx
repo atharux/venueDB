@@ -109,6 +109,28 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
         </button>
       </div>
 
+      {(() => {
+        const vs = verifiedStatus(venue)
+        const gaps: string[] = []
+        if (!venue.email && !venue.instagram && !venue.phone) gaps.push('no contact info')
+        else if (!venue.email) gaps.push('no email')
+        if (!venue.website) gaps.push('no website')
+        if (vs === 'unverified') gaps.push('unverified')
+        else if (vs === 'stale') gaps.push('verification stale')
+        if (gaps.length === 0) return null
+        return (
+          <div className="record-health-nudge">
+            <span className="record-health-icon">⚠</span>
+            <span className="record-health-label">Needs attention</span>
+            <div className="record-health-gaps">
+              {gaps.map(g => (
+                <span key={g} className="record-health-gap">{g}</span>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       {venue.pitch_angle ? (
         <section className="detail-section pitch-angle-banner">
           <div className="pitch-angle-label">Why this lead converts</div>
