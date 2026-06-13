@@ -6,17 +6,14 @@
 
 interface Env {
   STRIPE_SECRET_KEY: string
+  STRIPE_PRICE_ID_PRO?: string
+  STRIPE_PRICE_ID_AGENCY?: string
   VITE_APP_URL?: string
 }
 
 interface RequestBody {
   email?: unknown
   tier?: unknown
-}
-
-const PRICE_IDS: Record<string, string | undefined> = {
-  pro: process.env.STRIPE_PRICE_ID_PRO,
-  agency: process.env.STRIPE_PRICE_ID_AGENCY,
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -38,9 +35,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ error: 'Stripe not configured' }, { status: 503 })
   }
 
-  const priceId = tier === 'pro'
-    ? env.STRIPE_PRICE_ID_PRO
-    : env.STRIPE_PRICE_ID_AGENCY
+  const priceId = (tier === 'pro' ? env.STRIPE_PRICE_ID_PRO : env.STRIPE_PRICE_ID_AGENCY)
 
   if (!priceId) {
     return Response.json({ error: `Price ID for ${tier} not configured` }, { status: 503 })
