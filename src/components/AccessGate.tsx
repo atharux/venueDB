@@ -5,7 +5,13 @@ const STORAGE_KEY = 'vi_access_granted'
 
 export function isAccessGranted(): boolean {
   if (!APP_PASSCODE) return true
-  return localStorage.getItem(STORAGE_KEY) === 'yes'
+  try {
+    return localStorage.getItem(STORAGE_KEY) === 'yes'
+  } catch {
+    // Mobile private mode / "Block all cookies" can throw on storage access.
+    // Degrade to "not granted" (show the gate) instead of crashing to a blank screen.
+    return false
+  }
 }
 
 interface Props {
@@ -19,7 +25,7 @@ export function AccessGate({ onGranted }: Props) {
 
   const attempt = () => {
     if (code.trim() === APP_PASSCODE) {
-      localStorage.setItem(STORAGE_KEY, 'yes')
+      try { localStorage.setItem(STORAGE_KEY, 'yes') } catch { /* storage blocked — session-only access */ }
       onGranted()
     } else {
       setError(true)
