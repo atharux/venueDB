@@ -456,12 +456,73 @@ a:hover {
 .app-footer {
   display: flex;
   justify-content: space-between;
-  padding: 10px 24px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 12px 24px;
   border-top: 1px solid var(--border);
   font-size: 12px;
   color: var(--text-muted);
   background: var(--bg-elev);
   font-family: var(--mono);
+}
+
+/* ── Left: live status read-out ── */
+.footer-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.footer-stat {
+  white-space: nowrap;
+}
+
+.footer-stat strong {
+  color: var(--text-h);
+  font-weight: 700;
+}
+
+/* Quiet inline separator between status items. */
+.footer-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  flex: none;
+}
+
+.footer-scraper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.footer-scraper-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--text-faint);
+}
+
+.footer-scraper.is-online {
+  color: var(--ok);
+}
+.footer-scraper.is-online .footer-scraper-dot {
+  background: var(--ok);
+  box-shadow: 0 0 0 2px rgba(64, 111, 77, 0.18);
+}
+
+.footer-scraper.is-offline {
+  color: var(--text-muted);
+}
+.footer-scraper.is-offline .footer-scraper-dot {
+  background: var(--err);
+  box-shadow: 0 0 0 2px rgba(194, 65, 65, 0.16);
 }
 
 .muted {
@@ -2921,7 +2982,8 @@ tbody td {
 .footer-links {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px 16px;
 }
 
 .footer-link {
@@ -2932,18 +2994,25 @@ tbody td {
   font-family: var(--mono);
   color: var(--text-muted);
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
+  letter-spacing: 0.02em;
+  transition: color 0.12s;
 }
 
 .footer-link:hover {
   color: var(--text-h);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-.footer-sep {
-  color: var(--border-strong);
+/* Quiet product tag, set off from the action links by a divider. */
+.footer-brand {
+  color: var(--text-faint);
   font-size: 11px;
-  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
 }
 
 /* =========================================================
@@ -4124,4 +4193,145 @@ tbody tr.is-new.selected {
   line-height: 1.5;
   margin: 8px 0 4px;
   padding: 8px 10px;
+}
+
+/* =========================================================
+   MOBILE RESPONSIVE — bottom navigation bar (≤ 720px)
+   ---------------------------------------------------------
+   FIX: on phones the primary tab nav, the brand block and the
+   header actions all sat in one non-scrolling flex row that was
+   wider than the viewport. With no overflow containment the whole
+   PAGE scrolled sideways — you had to "slide the app left" to reach
+   the tabs. Here we lift the tab nav out of the header and pin it to
+   the bottom of the screen as a thumb-reachable tab bar (standard
+   app pattern), slim the header to brand + actions, and guard the
+   page against any future horizontal overflow.
+   ========================================================= */
+
+/* Never let a stray wide child force the page to scroll sideways.
+   `clip` (not `hidden`) keeps the sticky header working. */
+.app {
+  overflow-x: clip;
+}
+
+@media (max-width: 720px) {
+  /* ── Slim the top bar: brand on the left, actions on the right ── */
+  /* Keep wrap (not nowrap) so on very narrow screens the actions drop
+     to a second row instead of being clipped by the overflow guard. */
+  .app-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  /* Drop the secondary brand text so the title + actions fit one row. */
+  .brand-sub,
+  .brand-version {
+    display: none;
+  }
+
+  /* The localStorage/Supabase pill is informational, not actionable —
+     hide it on phones to make room for the Settings + Actions controls.
+     (Same info still lives in the footer and Migration guide.) */
+  .header-actions .mode-badge {
+    display: none;
+  }
+
+  .header-actions {
+    gap: 8px;
+  }
+
+  /* ── Tab nav becomes a fixed bottom bar ── */
+  .tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 25; /* above sticky header (20), below detail pane (30) + modals (200) */
+    margin-left: 0;
+    display: flex;
+    justify-content: space-around;
+    align-items: stretch;
+    gap: 2px;
+    padding: 6px 4px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border-strong);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Flatten the decorative groups so every button is an equal-width
+     direct child of the bar. Labels + separators are pure chrome here. */
+  .tabs .tab-group {
+    display: contents;
+  }
+  .tabs .tab-group-label,
+  .tabs .tab-group-sep {
+    display: none;
+  }
+
+  .tabs button {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 4px;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  /* Counts add width without adding navigational value in the bar —
+     drop them here (still shown on the Dashboard chips + footer). */
+  .tabs button .count {
+    display: none;
+  }
+
+  .tabs .badge-offline {
+    font-size: 8px;
+    padding: 1px 4px;
+  }
+
+  /* Reserve space at the bottom of the page so content and the footer
+     are never hidden behind the fixed bar. */
+  .app {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* The detail pane is a full-screen modal on mobile — let it cover the
+     whole viewport including where the bar would be. */
+  .detail-pane {
+    z-index: 35;
+  }
+
+  /* ── Discover sub-tabs ── */
+  /* Same overflow problem one level down: the Free Scan / Region Scan /
+     Import / Quick Add / Settings strip was a single nowrap row wider than
+     the screen, so the pane scrolled sideways. Let it wrap to a second row
+     and tighten the padding so every sub-tab is reachable without sliding. */
+  .discover-tabs {
+    flex-wrap: wrap;
+    gap: 2px 4px;
+  }
+
+  .discover-tab-btn {
+    padding: 8px 12px;
+  }
+
+  /* ── Footer ── */
+  /* Stack the status read-out above the links so neither crowds the
+     other, and drop the brand divider (it reads as a stray rule once
+     the tag wraps onto its own line). */
+  .app-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .footer-brand {
+    padding-left: 0;
+    border-left: none;
+  }
 }

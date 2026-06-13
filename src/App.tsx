@@ -402,22 +402,29 @@ function AppInner() {
       </main>
 
       <footer className="app-footer">
-        <span>
-          {scopedVenues.length} {activeEntity === 'festival' ? 'festivals' : 'venues'} ·
-          {' '}{storageMode === 'supabase' ? 'cloud sync' : 'browser-local'} ·
-          Scraper {scraperEnabled ? 'online' : 'offline (set VITE_SCRAPER_URL in deployed mode)'}
-        </span>
-        <div className="footer-links">
-          <button className="footer-link" onClick={() => setPricingOpen(true)}>Pricing</button>
-          <span className="footer-sep">·</span>
-          <button className="footer-link" onClick={() => setMigrationOpen(true)}>Migration guide</button>
-          <span className="footer-sep">·</span>
-          <button className="footer-link" onClick={() => setSettingsOpen(true)}>Settings</button>
-          <span className="footer-sep">·</span>
-          <button className="footer-link" onClick={() => setAboutOpen(true)}>About</button>
-          <span className="footer-sep">·</span>
-          <span className="muted">Venue Intelligence — ops console</span>
+        <div className="footer-status">
+          <span className="footer-stat">
+            <strong>{scopedVenues.length}</strong> {activeEntity === 'festival' ? 'festivals' : 'venues'}
+          </span>
+          <span className="footer-dot" aria-hidden="true" />
+          <span className="footer-stat">{storageMode === 'supabase' ? 'cloud sync' : 'browser-local'}</span>
+          <span className="footer-dot" aria-hidden="true" />
+          <span
+            className={`footer-scraper ${scraperEnabled ? 'is-online' : 'is-offline'}`}
+            title={scraperEnabled ? 'Scraper service reachable' : 'Scraper offline — set VITE_SCRAPER_URL in deployed mode to enable scraping'}
+          >
+            <span className="footer-scraper-dot" aria-hidden="true" />
+            Scraper {scraperEnabled ? 'online' : 'offline'}
+          </span>
         </div>
+
+        <nav className="footer-links" aria-label="Footer">
+          <button className="footer-link" onClick={() => setPricingOpen(true)}>Pricing</button>
+          <button className="footer-link" onClick={() => setMigrationOpen(true)}>Migration guide</button>
+          <button className="footer-link" onClick={() => setSettingsOpen(true)}>Settings</button>
+          <button className="footer-link" onClick={() => setAboutOpen(true)}>About</button>
+          <span className="footer-brand">Venue Intelligence</span>
+        </nav>
       </footer>
 
       {pricingOpen && <PricingModal onClose={() => setPricingOpen(false)} />}
