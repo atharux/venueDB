@@ -2,13 +2,60 @@ import { createServer } from 'node:http'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdirSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import Database from 'better-sqlite3'
 
 const execFileAsync = promisify(execFile)
 const PORT = Number(process.env.LOCAL_API_PORT || 8787)
 const MAX_BYTES = 1_500_000
 const USER_AGENT = 'VenueIntelBot/0.2 (+local-api)'
+
+// ---------------------------------------------------------------------------
+// Local SQLite venue store (hard-drive persistence — replaces Supabase when
+// the free tier is exhausted). Each venue is kept as a JSON blob plus a few
+// indexed columns, so the rich Venue type (tags[], custom_fields{}, etc.)
+// round-trips exactly without column drift. Default file: ./data/venues.db
+// ---------------------------------------------------------------------------
+const DATA_DIR = process.env.VENUE_DB_DIR || path.join(process.cwd(), 'data')
+mkdirSync(DATA_DIR, { recursive: true })
+const DB_PATH = path.join(DATA_DIR, 'venues.db')
+const db = new Database(DB_PATH)
+db.pragma('journal_mode = WAL')
+db.exec(`CREATE TABLE IF NOT EXISTS venues (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  city TEXT,
+  status TEXT,
+  updated_at TEXT,
+  data TEXT NOT NULL
+)`)
+
+const listVenuesStmt = db.prepare('SELECT data FROM venues ORDER BY updated_at DESC')
+const countVenuesStmt = db.prepare('SELECT COUNT(*) AS n FROM venues')
+const clearVenuesStmt = db.prepare('DELETE FROM venues')
+const insertVenueStmt = db.prepare(
+  'INSERT OR REPLACE INTO venues (id, name, city, status, updated_at, data) VALUES (@id, @name, @city, @status, @updated_at, @data)',
+)
+
+// Mirror localStorage semantics: every mutating call sends the full venue list,
+// so we replace the whole table inside one transaction.
+const replaceAllVenues = db.transaction(venues => {
+  clearVenuesStmt.run()
+  for (const venue of venues) {
+    if (!venue || venue.id == null) continue
+    insertVenueStmt.run({
+      id: String(venue.id),
+      name: venue.name ?? '',
+      city: venue.city ?? '',
+      status: venue.status ?? '',
+      updated_at: venue.updated_at ?? '',
+      data: JSON.stringify(venue),
+    })
+  }
+  return countVenuesStmt.get().n
+})
 
 createServer(async (req, res) => {
   setCors(res)
@@ -22,7 +69,18 @@ createServer(async (req, res) => {
     const url = new URL(req.url || '/', `http://${req.headers.host}`)
 
     if (url.pathname === '/health') {
-      return sendJson(res, 200, { ok: true, mode: 'local-api-server', hasSearch: true })
+      return sendJson(res, 200, { ok: true, mode: 'local-api-server', hasSearch: true, hasDb: true, venues: countVenuesStmt.get().n })
+    }
+
+    if (url.pathname === '/venues' && req.method === 'GET') {
+      return sendJson(res, 200, listVenuesStmt.all().map(row => JSON.parse(row.data)))
+    }
+
+    if (url.pathname === '/venues/bulk' && req.method === 'POST') {
+      const body = await readJsonBody(req)
+      if (!Array.isArray(body?.venues)) return sendJson(res, 400, { error: 'Missing venues array' })
+      const count = replaceAllVenues(body.venues)
+      return sendJson(res, 200, { ok: true, count })
     }
 
     if (url.pathname === '/scrape' && req.method === 'POST') {
@@ -73,7 +131,7 @@ createServer(async (req, res) => {
   } catch (error) {
     return sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
   }
-}).listen(PORT, () => {
+}).listen(PORT, '127.0.0.1', () => {
   console.log(`Local API server listening on http://localhost:${PORT}`)
 })
 
@@ -258,7 +316,8 @@ async function searchDuckDuckGo(query) {
 
 async function parseXlsxRows(fileName, base64) {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'venue-intel-sheet-'))
-  const tempFile = path.join(tempDir, fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`)
+  const safeName = path.basename(fileName)
+  const tempFile = path.join(tempDir, safeName.endsWith('.xlsx') ? safeName : `${safeName}.xlsx`)
   try {
     await writeFile(tempFile, Buffer.from(base64, 'base64'))
     const python = await detectPython()

@@ -30,3 +30,4 @@ dist-ssr
 *.sw?
 scripts/scrapers/**/__pycache__
 scripts/**/__pycache__
+.wrangler

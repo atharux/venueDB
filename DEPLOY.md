@@ -107,11 +107,33 @@ If both return JSON, you're done with the scraper. Open the deployed site in the
 
    **Why plaintext for both?** Any variable prefixed with `VITE_` gets baked into the client-side JS at build time — it's in the public bundle, downloadable by anyone via DevTools. Encrypting it in Cloudflare's storage doesn't change that. The Supabase **anon public** key is designed to be browser-exposed; security comes from Row-Level Security (see §6), not from hiding the key.
 
-   Rule for everything you'll add later: **`VITE_*` → Plaintext (public). No `VITE_` prefix → Encrypt (backend-only secret used inside Pages Functions, like an OpenRouter or scraper API key).** Never put your Supabase `service_role` key into Cloudflare env vars — it bypasses RLS and would destroy your database if leaked.
+   Rule for everything you'll add later: **`VITE_*` → Plaintext (public). No `VITE_` prefix → Encrypt (backend-only secret used inside Pages Functions, like an OpenRouter or scraper API key).**
+
+   **The `service_role` key follows that same rule — with no room for error.** It bypasses RLS entirely, so it must *never* be given a `VITE_` prefix and never appear in a plaintext var: either would bake it into the public JS bundle and hand anyone full read/write on your database. It is safe *only* as an **Encrypted** variable read inside a Pages Function, which is exactly how `functions/api/venues.ts` consumes it (see §Write proxy below). If you are ever unsure which bucket a key belongs in, it belongs in Encrypted.
 
 5. Trigger a redeploy: Deployments tab → latest deployment → **Retry deployment**. Env vars only apply to new builds.
 
 After the redeploy: reload the public site. The storage badge in the header flips from `localStorage` to `Supabase` (green).
+
+---
+
+## 4b. Write proxy — required for adding/importing venues
+
+Migration `0003_rls_anon_readonly.sql` makes the anon key **read-only**. That is deliberate: this repo is public and the anon key ships in the JS bundle, so anon write access would let anyone wipe the venue table. Reads still go browser → Supabase directly; **writes go through `functions/api/venues.ts`**, which holds the `service_role` key server-side.
+
+Without the three variables below, reads work but every write (Quick Add, CSV import, enrichment) fails with `Write proxy 503: not configured`.
+
+Cloudflare Pages → Settings → Environment variables → add, for **Production** and **Preview**:
+
+| Variable | Type | Value |
+|---|---|---|
+| `SUPABASE_URL` | Encrypted | Same URL as `VITE_SUPABASE_URL` (no `VITE_` prefix — this one is read server-side) |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Encrypted** | Supabase → Settings → API → `service_role` key |
+| `APP_PASSCODE` | Encrypted | The **same string** as `VITE_APP_PASSCODE` |
+
+Then **Retry deployment** — env vars only apply to new builds.
+
+**What the passcode does and doesn't buy you.** The proxy requires an `x-app-passcode` header matching `APP_PASSCODE`, and fails closed if the secret is missing. But `VITE_APP_PASSCODE` is in the client bundle, so anyone who can load the app can extract it. This is a real improvement — the `service_role` key never leaves the server, the routes are narrow (no bulk-delete), and there's one choke point to rotate or rate-limit — but it is **not per-user authentication**. If this POC starts holding client-confidential data, replace the passcode with Supabase Auth and scope RLS to the `authenticated` role.
 
 ---
 
