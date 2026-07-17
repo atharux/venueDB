@@ -4335,3 +4335,100 @@ tbody tr.is-new.selected {
     border-left: none;
   }
 }
+
+/* ── Outreach funnel ─────────────────────────────────────────────────────── */
+
+.funnel-card {
+  margin-top: 12px;
+}
+
+.funnel-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.funnel-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 1fr) 48px minmax(80px, 3fr) 52px minmax(0, 1.4fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.funnel-label {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-h);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--accent-border);
+  text-underline-offset: 3px;
+}
+
+.funnel-label:disabled {
+  cursor: default;
+  text-decoration: none;
+  color: var(--text-muted);
+}
+
+.funnel-count {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-h);
+  text-align: right;
+}
+
+.funnel-bar {
+  display: block;
+  height: 8px;
+  background: var(--accent-bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.funnel-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  /* A 0-width bar renders as nothing and reads as a broken row, so keep a sliver. */
+  min-width: 2px;
+}
+
+.funnel-pct {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.funnel-step {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Stack on narrow screens — the 5-column grid gets unreadable under ~560px. */
+@media (max-width: 560px) {
+  .funnel-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'label count'
+      'bar   pct'
+      'step  step';
+    gap: 4px 10px;
+  }
+  .funnel-label { grid-area: label; }
+  .funnel-count { grid-area: count; }
+  .funnel-bar   { grid-area: bar; }
+  .funnel-pct   { grid-area: pct; }
+  .funnel-step  { grid-area: step; }
+}

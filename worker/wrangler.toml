@@ -15,7 +15,11 @@ compatibility_flags = ["nodejs_compat"]
 # usable free tier (Yelp Fusion is paid; Foursquare Place Search is a Pro
 # endpoint, only 500 calls/month free then $15 CPM).
 
-# CORS allowlist — comma-separated origins, or "*" for any.
-# Tighten in production: "https://venue-outreach-db.pages.dev,https://athar-eventplanner.pages.dev"
+# No [triggers]/crons here on purpose. A cron was declared on this worker but
+# src/index.ts only exports fetch — with no scheduled() handler the cron fired
+# into nothing, so it never kept Supabase awake. That job now lives in
+# .github/workflows/keepalive.yml. If you ever add a cron back, add the
+# matching scheduled() handler in the same change.
+
 [vars]
-ALLOWED_ORIGINS = "*"
+ALLOWED_ORIGINS = "https://venues.atharux.com,https://venuedb.pages.dev,https://events.atharux.com,https://athareventplanner-crm.pages.dev,http://localhost:5173,http://localhost:4173"

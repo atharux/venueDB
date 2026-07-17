@@ -99,9 +99,33 @@ async function supabaseFetch(path: string, init: RequestInit = {}) {
   return res
 }
 
+// Supabase caps every PostgREST response at 1000 rows server-side, and asking
+// for a wider Range does not lift it — a single unbounded request silently
+// returned only the first 1000 of 1598 venues. So page until a short page
+// arrives.
+//
+// The sort includes `id` as a tiebreaker on purpose: `updated_at` alone is not
+// unique (bulk edits stamp many rows with the same timestamp), and an unstable
+// sort lets rows shift between pages, which drops and duplicates records at the
+// page boundary.
+const SUPABASE_PAGE_SIZE = 1000
+
 async function loadSupabase(): Promise<Venue[]> {
-  const res = await supabaseFetch('/venues?select=*&order=updated_at.desc')
-  return (await res.json()) as Venue[]
+  const all: Venue[] = []
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const to = from + SUPABASE_PAGE_SIZE - 1
+    const res = await supabaseFetch('/venues?select=*&order=updated_at.desc,id.desc', {
+      headers: { 'Range-Unit': 'items', Range: `${from}-${to}` },
+    })
+    const page = (await res.json()) as Venue[]
+    all.push(...page)
+    if (page.length < SUPABASE_PAGE_SIZE) return all
+    // Belt-and-braces: never spin forever if the server ignores Range.
+    if (all.length > 100_000) {
+      console.warn('loadSupabase: stopping at 100k rows — Range paging may not be honoured')
+      return all
+    }
+  }
 }
 
 // ---------- Write proxy (service_role, server-side) ----------
