@@ -459,9 +459,42 @@ export const STATUSES = [
   'meeting_booked',
   'won',
   'lost',
+  'bounced',
   'on_hold',
 ] as const
 export type OutreachStatus = (typeof STATUSES)[number]
+
+/**
+ * The outreach funnel, as ordered stages. A venue's current status implies it
+ * reached every stage at or below its own rank — that's how the dashboard
+ * derives conversion rates without a status-history table.
+ *
+ * Only forward-moving stages get a rank. 'lost', 'bounced' and 'on_hold' are
+ * terminal or sideways: they say a deal stopped, not how far it got, so they
+ * are excluded from the funnel rather than ranked. 'new' and 'researching' sit
+ * below the funnel's entry point ('contacted') and rank 0.
+ */
+export const FUNNEL_STAGES = ['contacted', 'in_conversation', 'meeting_booked', 'won'] as const
+export type FunnelStage = (typeof FUNNEL_STAGES)[number]
+
+const STAGE_RANK: Record<OutreachStatus, number> = {
+  new: 0,
+  researching: 0,
+  ready: 0,
+  contacted: 1,
+  in_conversation: 2,
+  meeting_booked: 3,
+  won: 4,
+  // Terminal / sideways — see note above.
+  lost: 0,
+  bounced: 0,
+  on_hold: 0,
+}
+
+/** True when `status` implies the venue reached `stage` (or went past it). */
+export function reachedStage(status: OutreachStatus, stage: FunnelStage): boolean {
+  return STAGE_RANK[status] >= STAGE_RANK[stage]
+}
 
 export const STATUS_LABEL: Record<OutreachStatus, string> = {
   new: 'New',
@@ -472,6 +505,7 @@ export const STATUS_LABEL: Record<OutreachStatus, string> = {
   meeting_booked: 'Meeting booked',
   won: 'Won',
   lost: 'Lost',
+  bounced: 'Bounced',
   on_hold: 'On hold',
 }
 

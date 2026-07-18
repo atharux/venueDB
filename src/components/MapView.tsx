@@ -106,6 +106,7 @@ const STATUS_COLOR: Record<OutreachStatus, string> = {
   meeting_booked: '#10b981', // emerald
   won: '#22c55e',        // green
   lost: '#ef4444',       // red
+  bounced: '#ef4444',    // red — dead channel, same signal as lost
   on_hold: '#f97316',    // orange
 }
 

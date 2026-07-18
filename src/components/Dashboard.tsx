@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import type { Venue, OutreachStatus, City, Category, Tag } from '../types'
-import { STATUS_LABEL, STATUSES } from '../types'
+import type { Venue, OutreachStatus, City, Category, Tag, FunnelStage } from '../types'
+import { STATUS_LABEL, STATUSES, FUNNEL_STAGES, reachedStage } from '../types'
 import { BulkEnrichPanel } from './BulkEnrichPanel'
 import { ProGate } from './ProGate'
 
@@ -49,8 +49,26 @@ export function Dashboard({ venues, onDrillDown, onUpdateVenue, entityLabel = 'v
     return { byStatus, byCity, byCategory, withEmail, withInstagram, withPhone, withFacebook, withWebsite, hasDjs }
   }, [venues])
 
+  // Funnel counts: how many venues reached each stage, inferred from current
+  // status (see reachedStage / FUNNEL_STAGES). Percentages are of the funnel's
+  // entry stage — 'contacted' — not of all venues, since venues you never
+  // contacted were never in the funnel and would flatten every rate.
+  const funnel = useMemo(() => {
+    const counts = FUNNEL_STAGES.map(stage => ({
+      stage,
+      label: STATUS_LABEL[stage],
+      count: venues.filter(v => reachedStage(v.status, stage)).length,
+    }))
+    const entered = counts[0]?.count ?? 0
+    return counts.map(c => ({ ...c, pctOfEntered: entered ? (c.count / entered) * 100 : 0 }))
+  }, [venues])
+
   const total = venues.length
-  const reachable = venues.filter(v => v.email || v.instagram || v.phone).length
+  const bounced = stats.byStatus.get('bounced') ?? 0
+  // A bounced address is a dead channel, so it doesn't count as reachable.
+  const reachable = venues.filter(
+    v => v.status !== 'bounced' && (v.email || v.instagram || v.phone),
+  ).length
 
   return (
     <section className="dashboard">
@@ -64,7 +82,12 @@ export function Dashboard({ venues, onDrillDown, onUpdateVenue, entityLabel = 'v
           onClick={onDrillDown ? () => onDrillDown({ status: 'in_conversation' }) : undefined} />
         <Stat label="Won" value={stats.byStatus.get('won') ?? 0} tone="positive"
           onClick={onDrillDown ? () => onDrillDown({ status: 'won' }) : undefined} />
+        <Stat label="Bounced" value={bounced}
+          hint={bounced ? 'dead channel — excluded from Reachable' : undefined}
+          onClick={onDrillDown ? () => onDrillDown({ status: 'bounced' }) : undefined} />
       </div>
+
+      <FunnelCard funnel={funnel} onDrillDown={onDrillDown} />
 
       {onUpdateVenue ? <BulkEnrichPanel venues={venues} onUpdateVenue={onUpdateVenue} entityLabel={entityLabel} /> : null}
 
@@ -288,6 +311,67 @@ function FilterCard({
 // BulkEnrichPanel extracted to ./BulkEnrichPanel.tsx
 
 // ---------- Small primitives ----------
+
+function FunnelCard({
+  funnel,
+  onDrillDown,
+}: {
+  funnel: { stage: FunnelStage; label: string; count: number; pctOfEntered: number }[]
+  onDrillDown?: (filter: { status?: OutreachStatus }) => void
+}) {
+  const entered = funnel[0]?.count ?? 0
+
+  if (!entered) {
+    return (
+      <div className="card funnel-card">
+        <h3>Outreach funnel</h3>
+        <p className="muted small">
+          Nothing contacted yet — the funnel fills in once venues move to “Contacted”.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card funnel-card">
+      <h3>Outreach funnel</h3>
+      <p className="muted small">
+        Share of contacted venues reaching each stage. Derived from each venue's current
+        status, so a venue moved straight to a later stage still counts as having passed
+        the earlier ones.
+      </p>
+      <ul className="funnel-list">
+        {funnel.map((row, i) => {
+          const prev = i > 0 ? funnel[i - 1] : null
+          // Step conversion: share of the *previous* stage that got this far —
+          // this is where a funnel actually leaks.
+          const stepPct = prev && prev.count ? (row.count / prev.count) * 100 : null
+          return (
+            <li key={row.stage} className="funnel-row">
+              <button
+                type="button"
+                className="funnel-label"
+                onClick={onDrillDown ? () => onDrillDown({ status: row.stage }) : undefined}
+                disabled={!onDrillDown}
+                title={onDrillDown ? `Filter venues by ${row.label}` : undefined}
+              >
+                {row.label}
+              </button>
+              <span className="funnel-count">{row.count}</span>
+              <span className="funnel-bar" aria-hidden="true">
+                <span className="funnel-fill" style={{ width: `${row.pctOfEntered}%` }} />
+              </span>
+              <span className="funnel-pct">{row.pctOfEntered.toFixed(1)}%</span>
+              <span className="funnel-step muted small">
+                {stepPct === null ? 'entry' : `${stepPct.toFixed(0)}% of ${prev!.label}`}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
 
 function Stat({
   label,

@@ -7,7 +7,7 @@
 import type { Venue } from './types'
 import { SEED_VENUES, SEED_VERSION } from './seed'
 import { isLikelyPhone, normalizePhone } from './phone'
-import { isDemoMode } from './config'
+import { isDemoMode, APP_PASSCODE } from './config'
 
 const LS_KEY = 'crete-nightlife-venues-v1'
 const LS_VERSION_KEY = 'crete-nightlife-seed-version'
@@ -15,8 +15,24 @@ const LS_VERSION_KEY = 'crete-nightlife-seed-version'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
-export const storageMode: 'supabase' | 'localStorage' =
-  !isDemoMode && SUPABASE_URL && SUPABASE_ANON_KEY ? 'supabase' : 'localStorage'
+// Supabase writes go through the /api/venues Pages Function, not straight to
+// PostgREST: RLS gives anon read-only access, so the anon key cannot write.
+// See functions/api/venues.ts.
+const WRITE_PROXY_URL = '/api/venues'
+
+// Local SQLite-on-disk store, served by local-api-server.mjs (e.g.
+// http://localhost:8787). Used as the persistent backend when Supabase is not
+// configured — survives browser clears and has no ~5MB localStorage cap.
+const VENUE_API_URL = import.meta.env.VITE_VENUE_API_URL as string | undefined
+
+export const storageMode: 'supabase' | 'local-api' | 'localStorage' =
+  isDemoMode
+    ? 'localStorage'
+    : SUPABASE_URL && SUPABASE_ANON_KEY
+      ? 'supabase'
+      : VENUE_API_URL
+        ? 'local-api'
+        : 'localStorage'
 
 // ---------- localStorage adapter ----------
 
@@ -83,17 +99,61 @@ async function supabaseFetch(path: string, init: RequestInit = {}) {
   return res
 }
 
+// Supabase caps every PostgREST response at 1000 rows server-side, and asking
+// for a wider Range does not lift it — a single unbounded request silently
+// returned only the first 1000 of 1598 venues. So page until a short page
+// arrives.
+//
+// The sort includes `id` as a tiebreaker on purpose: `updated_at` alone is not
+// unique (bulk edits stamp many rows with the same timestamp), and an unstable
+// sort lets rows shift between pages, which drops and duplicates records at the
+// page boundary.
+const SUPABASE_PAGE_SIZE = 1000
+
 async function loadSupabase(): Promise<Venue[]> {
-  const res = await supabaseFetch('/venues?select=*&order=updated_at.desc')
-  return (await res.json()) as Venue[]
+  const all: Venue[] = []
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const to = from + SUPABASE_PAGE_SIZE - 1
+    const res = await supabaseFetch('/venues?select=*&order=updated_at.desc,id.desc', {
+      headers: { 'Range-Unit': 'items', Range: `${from}-${to}` },
+    })
+    const page = (await res.json()) as Venue[]
+    all.push(...page)
+    if (page.length < SUPABASE_PAGE_SIZE) return all
+    // Belt-and-braces: never spin forever if the server ignores Range.
+    if (all.length > 100_000) {
+      console.warn('loadSupabase: stopping at 100k rows — Range paging may not be honoured')
+      return all
+    }
+  }
+}
+
+// ---------- Write proxy (service_role, server-side) ----------
+
+async function proxyFetch(path: string, init: RequestInit = {}) {
+  const res = await fetch(`${WRITE_PROXY_URL}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      // Echoed back to the Pages Function, which compares it to the server-side
+      // APP_PASSCODE secret. Undefined when no passcode is configured (local
+      // dev) — the proxy then refuses the write rather than defaulting to open.
+      ...(APP_PASSCODE ? { 'x-app-passcode': APP_PASSCODE } : {}),
+      ...(init.headers || {}),
+    },
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Write proxy ${res.status}: ${body}`)
+  }
+  return res
 }
 
 async function upsertSupabase(venue: Venue): Promise<Venue> {
   try {
-    const res = await supabaseFetch('/venues', {
+    const res = await proxyFetch('', {
       method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify(venue),
+      body: JSON.stringify({ venues: [venue] }),
     })
     const rows = (await res.json()) as Venue[]
     return rows[0] ?? venue
@@ -102,29 +162,75 @@ async function upsertSupabase(venue: Venue): Promise<Venue> {
     if (!message.includes('custom_fields')) throw error
 
     const { custom_fields: _ignored, ...fallback } = venue
-    const res = await supabaseFetch('/venues', {
+    const res = await proxyFetch('', {
       method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify(fallback),
+      body: JSON.stringify({ venues: [fallback] }),
     })
     const rows = (await res.json()) as Venue[]
     return { ...(rows[0] ?? fallback), custom_fields: venue.custom_fields }
   }
 }
 
+async function patchSupabase(id: string, patch: Record<string, unknown>) {
+  await proxyFetch(`?id=${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
 async function deleteSupabase(id: string) {
-  await supabaseFetch(`/venues?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' })
+  await proxyFetch(`?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+// ---------- Local API (SQLite on disk) adapter ----------
+
+function venueApiUrl(path: string) {
+  return `${(VENUE_API_URL ?? '').replace(/\/$/, '')}${path}`
+}
+
+async function loadLocalApi(): Promise<Venue[]> {
+  const res = await fetch(venueApiUrl('/venues'))
+  if (!res.ok) throw new Error(`Local API ${res.status}: ${await res.text()}`)
+  return (await res.json()) as Venue[]
+}
+
+// Mirrors localStorage semantics: persist the full venue list in one call.
+async function bulkReplaceLocalApi(venues: Venue[]): Promise<void> {
+  const res = await fetch(venueApiUrl('/venues/bulk'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ venues }),
+  })
+  if (!res.ok) throw new Error(`Local API ${res.status}: ${await res.text()}`)
 }
 
 // ---------- Unified API ----------
 
 export async function listVenues(): Promise<Venue[]> {
+  // No silent fallback to localStorage when a remote backend is configured.
+  // It used to return the 28 seed venues on any failure, so a total backend
+  // outage (e.g. Supabase free-tier auto-pause, which pulls the project's DNS)
+  // looked exactly like "the database lost all its records". Let the error
+  // reach useVenues so App renders the error banner and the real data stays
+  // visibly absent rather than silently replaced.
   if (storageMode === 'supabase') {
     try {
       return await loadSupabase()
     } catch (err) {
-      console.warn('Supabase load failed, falling back to localStorage', err)
-      return loadLocal()
+      throw new Error(
+        `Could not reach the venue database — your data is not lost, the backend is unreachable. ` +
+          `Check the Supabase project is not paused. (${err instanceof Error ? err.message : String(err)})`,
+      )
+    }
+  }
+  if (storageMode === 'local-api') {
+    try {
+      return await loadLocalApi()
+    } catch (err) {
+      throw new Error(
+        `Could not reach the local venue API at ${VENUE_API_URL} — your data is not lost, the server is unreachable. ` +
+          `(${err instanceof Error ? err.message : String(err)})`,
+      )
     }
   }
   return loadLocal()
@@ -134,6 +240,10 @@ export async function saveVenue(venue: Venue, allVenues: Venue[]): Promise<Venue
   if (storageMode === 'supabase') {
     return upsertSupabase(venue)
   }
+  if (storageMode === 'local-api') {
+    await bulkReplaceLocalApi(allVenues)
+    return venue
+  }
   saveLocal(allVenues)
   return venue
 }
@@ -141,6 +251,10 @@ export async function saveVenue(venue: Venue, allVenues: Venue[]): Promise<Venue
 export async function removeVenue(id: string, allVenues: Venue[]): Promise<void> {
   if (storageMode === 'supabase') {
     await deleteSupabase(id)
+    return
+  }
+  if (storageMode === 'local-api') {
+    await bulkReplaceLocalApi(allVenues)
     return
   }
   saveLocal(allVenues)
@@ -175,6 +289,11 @@ export async function restoreSeedVenues(currentVenues: Venue[]): Promise<Venue[]
     return merged
   }
 
+  if (storageMode === 'local-api') {
+    await bulkReplaceLocalApi(merged)
+    return merged
+  }
+
   saveLocal(merged)
   localStorage.setItem(LS_VERSION_KEY, String(SEED_VERSION))
   return merged
@@ -198,6 +317,8 @@ export async function deleteDuplicateVenues(currentVenues: Venue[]) {
     for (const duplicate of duplicates) {
       await deleteSupabase(duplicate.id)
     }
+  } else if (storageMode === 'local-api') {
+    await bulkReplaceLocalApi(deduped)
   } else {
     saveLocal(deduped)
   }
@@ -236,17 +357,13 @@ export async function clearInvalidPhones(currentVenues: Venue[]) {
 
   if (storageMode === 'supabase') {
     for (const v of toClear) {
-      await supabaseFetch(`/venues?id=eq.${encodeURIComponent(v.id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ phone: null, updated_at: now }),
-      })
+      await patchSupabase(v.id, { phone: null, updated_at: now })
     }
     for (const v of toNormalize) {
-      await supabaseFetch(`/venues?id=eq.${encodeURIComponent(v.id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ phone: normalizePhone(v.phone!), updated_at: now }),
-      })
+      await patchSupabase(v.id, { phone: normalizePhone(v.phone!), updated_at: now })
     }
+  } else if (storageMode === 'local-api') {
+    await bulkReplaceLocalApi(next)
   } else {
     saveLocal(next)
   }

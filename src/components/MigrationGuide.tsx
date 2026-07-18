@@ -59,7 +59,7 @@ const STEPS = [
   },
   {
     title: 'Copy your API credentials',
-    body: 'In your Supabase dashboard: Settings → API. Copy the Project URL and the anon/public key. Keep the service_role key secret — you won\'t need it for this app.',
+    body: 'In your Supabase dashboard: Settings → API. Copy the Project URL and the anon/public key — those two go in the browser. The service_role key is only ever set as an encrypted Cloudflare secret for the /api/venues write proxy; it must never go in a VITE_ variable. See DEPLOY.md §4b.',
   },
   {
     title: 'Add credentials to your environment',

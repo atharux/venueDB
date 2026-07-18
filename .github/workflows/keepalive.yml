@@ -1,0 +1,48 @@
+# Keeps the Supabase project from free-tier auto-pause.
+#
+# Supabase pauses free projects after ~7 days of inactivity and removes the
+# project's DNS record when it does. The app then can't resolve the host, and
+# (before the storage.ts fix) fell back to seed data — which read as total data
+# loss. A read every 3 days counts as activity and prevents this.
+#
+# Setup — repo Settings → Secrets and variables → Actions:
+#   SUPABASE_URL       e.g. https://<ref>.supabase.co   (same as VITE_SUPABASE_URL)
+#   SUPABASE_ANON_KEY  the anon key (read-only under RLS, safe for this)
+#
+# CAVEAT: GitHub disables scheduled workflows on repos with 60 days of no
+# activity, and emails the repo admins first. If this repo goes quiet, re-enable
+# the schedule in the Actions tab or the pause will silently come back.
+
+name: Supabase keepalive
+
+on:
+  schedule:
+    - cron: '0 6 */3 * *' # 06:00 UTC, every 3 days — well inside the ~7 day window
+  workflow_dispatch: # allows a manual run to verify setup
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping venues table
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_ANON_KEY secrets are not set — keepalive cannot run."
+            exit 1
+          fi
+
+          code=$(curl -sS -o /tmp/body.txt -w '%{http_code}' \
+            "$SUPABASE_URL/rest/v1/venues?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+
+          echo "HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Keepalive ping failed with HTTP $code — the project may already be paused."
+            cat /tmp/body.txt
+            exit 1
+          fi
+          echo "Supabase project is awake."
