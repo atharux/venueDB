@@ -225,6 +225,8 @@ For PR previews: push to a branch, open a PR on GitHub, Cloudflare auto-creates 
 
 **Supabase reads but writes fail with 401** — you pasted the `service_role` key by mistake. Settings → API → use the **anon public** key, never the secret one.
 
+**Writes fail with `42501` "new row violates row-level security policy for table venues"** — the reverse mistake: the `SUPABASE_SERVICE_ROLE_KEY` **Encrypted** variable on the Pages project holds the **anon** key, not the real `service_role` key. The service_role key bypasses RLS entirely, so it can *never* produce a `42501`; getting one means the proxy authenticated to PostgREST as the `anon` role and migration `0003_rls_anon_readonly.sql` (which drops anon insert/update/delete) rejected the write. Fix: Supabase → Settings → API → copy the **`service_role`** secret JWT, set it as `SUPABASE_SERVICE_ROLE_KEY` (Encrypted), and **redeploy** (env changes don't apply until the next deploy). Verify by decoding the JWT — its payload must read `"role":"service_role"`, not `"role":"anon"`.
+
 **Enrich shows "no new contacts" for everything** — open browser DevTools → Network tab → click enrich → check the response from `/api/enrich`. The `attempts` array shows what the scraper actually saw. Three common causes:
   - All your seeded venues are already complete (nothing to fill in — expected)
   - Venues have JavaScript-rendered sites (regex sees empty HTML)
