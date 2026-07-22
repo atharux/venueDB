@@ -384,6 +384,41 @@ function pickBestWebsite(results) {
   return results.find(result => blacklist.every(domain => !result.url.includes(domain)))?.url
 }
 
+// Live free-model discovery + retry — mirrors scraper-core.ts (kept in sync).
+const OR_SKIP = /coder|math|code-|content-safety|guard|moderation|lyria|whisper|embed|rerank/i
+const OR_DEPRIORITISE = /gemma/i
+const OR_FALLBACK = 'meta-llama/llama-3.3-70b-instruct:free'
+const OR_TTL_MS = 10 * 60 * 1000
+let OR_MODELS_CACHE = { models: [], at: 0 }
+
+async function discoverFreeModels(apiKey) {
+  if (OR_MODELS_CACHE.models.length && Date.now() - OR_MODELS_CACHE.at < OR_TTL_MS) return OR_MODELS_CACHE.models
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/models', { headers: { Authorization: `Bearer ${apiKey}` } })
+    if (!res.ok) throw new Error(`models ${res.status}`)
+    const { data } = await res.json()
+    const free = (data || [])
+      .filter(m => {
+        const id = String(m.id || '')
+        const isFree = id.endsWith(':free') || (m.pricing?.prompt === '0' && m.pricing?.completion === '0')
+        return isFree && !OR_SKIP.test(id)
+      })
+      .sort((a, b) => (b.context_length ?? 0) - (a.context_length ?? 0))
+      .sort((a, b) => (OR_DEPRIORITISE.test(a.id) ? 1 : 0) - (OR_DEPRIORITISE.test(b.id) ? 1 : 0))
+      .map(m => m.id)
+    if (free.length) OR_MODELS_CACHE = { models: free, at: Date.now() }
+    return free.length ? free : [OR_FALLBACK]
+  } catch {
+    return OR_MODELS_CACHE.models.length ? OR_MODELS_CACHE.models : [OR_FALLBACK]
+  }
+}
+
+async function resolveModelQueue(apiKey, requested) {
+  const free = await discoverFreeModels(apiKey)
+  const wanted = requested && requested !== 'openrouter/auto' && requested !== 'auto-free' && !OR_SKIP.test(requested) ? requested : undefined
+  return [...new Set([wanted, ...free].filter(Boolean))].slice(0, 4)
+}
+
 async function selectWithOpenRouter(input, scraped, searchResults, ai) {
   const prompt = [
     'Return strict JSON only.',
@@ -391,24 +426,35 @@ async function selectWithOpenRouter(input, scraped, searchResults, ai) {
     'Choose the best available public contact data for this business.',
     JSON.stringify({ business: input, scraped, searchResults: searchResults.slice(0, 5), outputSchema: { instagram: 'string|null', email: 'string|null', phone: 'string|null', notes: 'string|null' } }, null, 2),
   ].join('\n')
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${ai.apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: ai.model || 'openrouter/auto',
-      messages: [
-        { role: 'system', content: 'You extract structured business contact data from evidence. Output valid JSON only and leave unknown fields null.' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0,
-      max_tokens: 250,
-    }),
-  })
-  if (!res.ok) throw new Error(`OpenRouter ${res.status}`)
-  const data = await res.json()
-  const content = data.choices?.[0]?.message?.content ?? '{}'
-  const parsed = parseJsonObject(content)
-  return { instagram: parsed.instagram ?? undefined, email: parsed.email ?? undefined, phone: parsed.phone ?? undefined, notes: parsed.notes ?? undefined, model: data.model }
+
+  const queue = await resolveModelQueue(ai.apiKey ?? '', ai.model)
+  let lastError = ''
+  for (const model of queue) {
+    let res
+    try {
+      res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${ai.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'You extract structured business contact data from evidence. Output valid JSON only and leave unknown fields null.' },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0,
+          max_tokens: 250,
+        }),
+      })
+    } catch (err) { lastError = String(err); continue }
+    if (!res.ok) { lastError = `OpenRouter ${res.status}`; continue }
+    const data = await res.json()
+    const content = data.choices?.[0]?.message?.content ?? '{}'
+    try {
+      const parsed = parseJsonObject(content)
+      return { instagram: parsed.instagram ?? undefined, email: parsed.email ?? undefined, phone: parsed.phone ?? undefined, notes: parsed.notes ?? undefined, model: data.model ?? model }
+    } catch (err) { lastError = `parse: ${String(err)}`; continue }
+  }
+  throw new Error(`OpenRouter: all free models failed. (${lastError})`)
 }
 
 function parseJsonObject(content) {
