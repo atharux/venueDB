@@ -32,7 +32,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const apiKey = request.headers.get('X-OpenRouter-Api-Key') ?? undefined
-    const model = request.headers.get('X-OpenRouter-Model') ?? 'openrouter/auto'
+    // Undefined = let scraper-core auto-pick the best live *free* model.
+    // (Previously defaulted to 'openrouter/auto' — the PAID auto-router.)
+    const model = request.headers.get('X-OpenRouter-Model') ?? undefined
 
     const result = await enrichLead(
       {

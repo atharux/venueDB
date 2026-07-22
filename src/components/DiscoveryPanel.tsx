@@ -14,7 +14,7 @@ import {
   type OsmVenue,
 } from '../scraper'
 import { classifyEntityType, findExistingVenueByName, toVenueDraft, type ImportedLeadRow } from '../importCsv'
-import { DEFAULT_AI_SETTINGS, loadAiSettings, saveAiSettings } from '../aiSettings'
+import { DEFAULT_AI_SETTINGS, loadAiSettings, saveAiSettings, fetchFreeModelIds } from '../aiSettings'
 import { parseUploadedSpreadsheet } from '../importApi'
 import { scanRegion, type RegionScanResult } from '../regionScan'
 import { ProGate } from './ProGate'
@@ -72,6 +72,16 @@ function toTitleCase(s: string): string {
 export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, defaultEntityType = 'venue' }: Props) {
   const [discoverTab, setDiscoverTab] = useState<DiscoverTab>('free-scan')
   const [aiSettings, setAiSettings] = useState(loadAiSettings)
+
+  // Live free-model list for the Settings picker (autocomplete), so it never
+  // goes stale. Fetched whenever an OpenRouter key is present.
+  const [freeModels, setFreeModels] = useState<string[]>([])
+  useEffect(() => {
+    let active = true
+    if (!aiSettings.openRouterApiKey) { setFreeModels([]); return }
+    fetchFreeModelIds(aiSettings.openRouterApiKey).then(ids => { if (active) setFreeModels(ids) })
+    return () => { active = false }
+  }, [aiSettings.openRouterApiKey])
 
   const [importEntityType, setImportEntityType] = useState<'auto' | 'venue' | 'festival'>('auto')
   useEffect(() => {
@@ -1190,6 +1200,7 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
                   <input
                     value={aiSettings.openRouterModel}
                     placeholder={DEFAULT_AI_SETTINGS.openRouterModel}
+                    list="openrouter-free-models"
                     onChange={e => {
                       const next = {
                         ...aiSettings,
@@ -1199,8 +1210,15 @@ export function DiscoveryPanel({ venues, onAdd, onUpdate, existingNames, default
                       saveAiSettings(next)
                     }}
                   />
+                  <datalist id="openrouter-free-models">
+                    <option value="auto-free">Auto — best live free model (recommended)</option>
+                    {freeModels.map(id => <option key={id} value={id}>{id}</option>)}
+                  </datalist>
                 </label>
-                <div className="muted small">Recommended: <code>openrouter/auto</code></div>
+                <div className="muted small">
+                  Recommended: <code>auto-free</code> — picks the best live free model automatically.
+                  {freeModels.length > 0 && <> {freeModels.length} free models available.</>}
+                </div>
               </div>
 
               {/* Google Maps */}
