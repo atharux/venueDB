@@ -4,8 +4,9 @@ import { STATUSES, STATUS_LABEL } from '../types'
 import { TEMPLATES, copyToClipboard, instagramUrl } from '../outreach'
 import { ProGate } from './ProGate'
 import { DemoUnlock } from './DemoUnlock'
-import { getLatestEnrollment, sequencingEnabled, startSequence } from '../sequencing'
+import { advanceEnrollment, getLatestEnrollment, sequencingEnabled, startSequence } from '../sequencing'
 import type { SequenceEnrollment } from '../sequencing'
+import { SEQUENCE_STEPS } from '../sequenceSteps'
 
 const TEMPLATE_HINTS: Record<string, string> = {
   'ig-intro-short': 'Short cold DM — best for first contact via Instagram',
@@ -44,6 +45,27 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
     setEnrollError(null)
     try {
       setEnrollment(await startSequence(venue.id))
+    } catch (err) {
+      setEnrollError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setEnrollBusy(false)
+    }
+  }
+
+  // Walking-skeleton step 2 (#8): open the mailto: for the CURRENT step
+  // (matches the existing "Open email" channel button — pure navigation),
+  // then persist the advance. If the mailto never gets sent, the enrollment
+  // still advances — same trust model as "Mark as contacted" above.
+  const handleAdvance = async () => {
+    if (!enrollment) return
+    const step = SEQUENCE_STEPS[enrollment.current_step]
+    if (step && venue.email) {
+      window.location.href = `mailto:${venue.email}?subject=${encodeURIComponent(step.subject)}&body=${encodeURIComponent(step.body(venue))}`
+    }
+    setEnrollBusy(true)
+    setEnrollError(null)
+    try {
+      setEnrollment(await advanceEnrollment(enrollment))
     } catch (err) {
       setEnrollError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -194,23 +216,37 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
         )}
       </div>
 
-      {/* Sequencing walking-skeleton (#7): a real, single hardcoded step.
-          Multi-step cadence, templates, and the dashboard board land in
-          #8/#9/#10 — this only proves the enroll → persist → read-back path.
-          Paid feature: locked behind DemoUnlock, separate from the client's
-          own passcode — only unlocks for a live sales demo. */}
+      {/* Sequencing walking-skeleton: #7 proved enroll → persist → read-back.
+          #8 adds the real cadence mechanic (multi-step, advance, mailto).
+          Templates/dashboard land in #9/#10. Paid feature: locked behind
+          DemoUnlock, separate from the client's own passcode — only
+          unlocks for a live sales demo. */}
       <DemoUnlock>
         <div className="sequence-row">
           {!sequencingEnabled ? (
             <button className="channel-btn disabled" disabled title="Sequencing requires Supabase to be configured">
               Start sequence
             </button>
-          ) : enrollment ? (
-            <div className="muted small">Enrolled: {enrollment.step_label}</div>
-          ) : (
+          ) : !enrollment ? (
             <button className="primary-btn" onClick={handleStartSequence} disabled={enrollBusy}>
               {enrollBusy ? 'Starting…' : 'Start sequence'}
             </button>
+          ) : enrollment.state === 'done' ? (
+            <div className="muted small">Sequence complete — {SEQUENCE_STEPS.length} of {SEQUENCE_STEPS.length} steps sent</div>
+          ) : (
+            <>
+              <div className="muted small">
+                Step {enrollment.current_step + 1} of {SEQUENCE_STEPS.length}: {enrollment.step_label}
+              </div>
+              <button
+                className="primary-btn"
+                onClick={handleAdvance}
+                disabled={enrollBusy}
+                title={venue.email ? 'Opens your email client for this step, then advances' : 'No email set — advances without opening mail'}
+              >
+                {enrollBusy ? 'Advancing…' : 'Advance to next step'}
+              </button>
+            </>
           )}
           {enrollError ? <div className="scrape-error">{enrollError}</div> : null}
         </div>
