@@ -1910,6 +1910,20 @@ tbody td {
   width: 100%;
 }
 
+/* Sequencing (#7) — revealed only via DemoUnlock's hidden key sequence */
+@keyframes demo-unlock-fade-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.demo-unlock-reveal {
+  animation: demo-unlock-fade-in 0.4s ease-out;
+}
+.sequence-row {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
 /* =========================================================
    FESTIVALS THEME — deep magenta accent so the Festivals
    view is visually distinct from the tactical-green Venues
