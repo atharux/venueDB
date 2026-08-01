@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Venue, OutreachStatus } from '../types'
 import { STATUSES, STATUS_LABEL } from '../types'
 import { TEMPLATES, copyToClipboard, instagramUrl } from '../outreach'
 import { ProGate } from './ProGate'
+import { DemoUnlock } from './DemoUnlock'
+import { getLatestEnrollment, sequencingEnabled, startSequence } from '../sequencing'
+import type { SequenceEnrollment } from '../sequencing'
 
 const TEMPLATE_HINTS: Record<string, string> = {
   'ig-intro-short': 'Short cold DM — best for first contact via Instagram',
@@ -21,6 +24,32 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
   const [templateId, setTemplateId] = useState(TEMPLATES[0].id)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [proExpanded, setProExpanded] = useState(false)
+  const [enrollment, setEnrollment] = useState<SequenceEnrollment | null>(null)
+  const [enrollBusy, setEnrollBusy] = useState(false)
+  const [enrollError, setEnrollError] = useState<string | null>(null)
+
+  // Walking-skeleton step 1 (#7): load the real enrollment row, if any, so a
+  // reload proves the round trip rather than trusting local state.
+  useEffect(() => {
+    setEnrollment(null)
+    setEnrollError(null)
+    if (!sequencingEnabled) return
+    getLatestEnrollment(venue.id)
+      .then(setEnrollment)
+      .catch(err => setEnrollError(err instanceof Error ? err.message : String(err)))
+  }, [venue.id])
+
+  const handleStartSequence = async () => {
+    setEnrollBusy(true)
+    setEnrollError(null)
+    try {
+      setEnrollment(await startSequence(venue.id))
+    } catch (err) {
+      setEnrollError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setEnrollBusy(false)
+    }
+  }
 
   const template = TEMPLATES.find(t => t.id === templateId) ?? TEMPLATES[0]
   const message = template.build(venue)
@@ -164,6 +193,28 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
           </button>
         )}
       </div>
+
+      {/* Sequencing walking-skeleton (#7): a real, single hardcoded step.
+          Multi-step cadence, templates, and the dashboard board land in
+          #8/#9/#10 — this only proves the enroll → persist → read-back path.
+          Paid feature: locked behind DemoUnlock, separate from the client's
+          own passcode — only unlocks for a live sales demo. */}
+      <DemoUnlock>
+        <div className="sequence-row">
+          {!sequencingEnabled ? (
+            <button className="channel-btn disabled" disabled title="Sequencing requires Supabase to be configured">
+              Start sequence
+            </button>
+          ) : enrollment ? (
+            <div className="muted small">Enrolled: {enrollment.step_label}</div>
+          ) : (
+            <button className="primary-btn" onClick={handleStartSequence} disabled={enrollBusy}>
+              {enrollBusy ? 'Starting…' : 'Start sequence'}
+            </button>
+          )}
+          {enrollError ? <div className="scrape-error">{enrollError}</div> : null}
+        </div>
+      </DemoUnlock>
 
       <button
         className="pro-features-toggle"
