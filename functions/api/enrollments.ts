@@ -5,8 +5,9 @@
 // Writes come here instead, service_role, so the anon key never gets insert.
 //
 // Walking-skeleton step 1 (#7): a single hardcoded-content insert.
-// Step 2 (#8) adds PATCH to advance current_step/state. Real sequence model
-// (sequences/sequence_steps tables) is #9.
+// Step 2 (#8) adds PATCH to advance current_step/state.
+// Step 3 (#9): POST now requires sequence_id — content is a real DB row,
+// not a hardcoded string.
 
 interface Env {
   SUPABASE_URL?: string
@@ -51,22 +52,25 @@ async function supabase(env: Env, path: string, init: RequestInit) {
   })
 }
 
-// POST /api/enrollments  { venue_id: string, step_label: string }
+// POST /api/enrollments  { venue_id: string, sequence_id: string, step_label: string }
 // Inserts one enrollment row. state defaults to 'active' in the DB.
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const denied = authorize(request, env)
   if (denied) return denied
 
-  let payload: { venue_id?: unknown; step_label?: unknown }
+  let payload: { venue_id?: unknown; sequence_id?: unknown; step_label?: unknown }
   try {
     payload = await request.json()
   } catch {
     return bad(400, 'Body must be JSON')
   }
 
-  const { venue_id, step_label } = payload
+  const { venue_id, sequence_id, step_label } = payload
   if (typeof venue_id !== 'string' || !venue_id) {
     return bad(400, 'Body must include venue_id (string)')
+  }
+  if (typeof sequence_id !== 'string' || !sequence_id) {
+    return bad(400, 'Body must include sequence_id (string)')
   }
   if (typeof step_label !== 'string' || !step_label) {
     return bad(400, 'Body must include step_label (string)')
@@ -75,7 +79,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   return supabase(env, '/sequence_enrollments', {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
-    body: JSON.stringify([{ venue_id, step_label }]),
+    body: JSON.stringify([{ venue_id, sequence_id, step_label }]),
   })
 }
 
