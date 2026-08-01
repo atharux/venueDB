@@ -4,8 +4,9 @@
 // with the anon key (RLS: read-only, see supabase/migrations/0004_sequence_enrollments.sql).
 // Writes come here instead, service_role, so the anon key never gets insert.
 //
-// Walking-skeleton step 1 (#7): a single hardcoded-content insert. No
-// multi-step logic, no advancing — see #8/#9 for the real sequence model.
+// Walking-skeleton step 1 (#7): a single hardcoded-content insert.
+// Step 2 (#8) adds PATCH to advance current_step/state. Real sequence model
+// (sequences/sequence_steps tables) is #9.
 
 interface Env {
   SUPABASE_URL?: string
@@ -75,5 +76,46 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
     body: JSON.stringify([{ venue_id, step_label }]),
+  })
+}
+
+// PATCH /api/enrollments?id=<id>  { current_step?, step_label?, state? }
+// Narrow on purpose — only the columns the advance action needs, not an
+// arbitrary patch (unlike venues, this table has no client-editable fields).
+export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
+  const denied = authorize(request, env)
+  if (denied) return denied
+
+  const id = new URL(request.url).searchParams.get('id')
+  if (!id) return bad(400, 'Missing ?id=')
+
+  let body: { current_step?: unknown; step_label?: unknown; state?: unknown }
+  try {
+    body = await request.json()
+  } catch {
+    return bad(400, 'Body must be JSON')
+  }
+
+  const patch: Record<string, unknown> = {}
+  if (body.current_step !== undefined) {
+    if (typeof body.current_step !== 'number') return bad(400, 'current_step must be a number')
+    patch.current_step = body.current_step
+  }
+  if (body.step_label !== undefined) {
+    if (typeof body.step_label !== 'string') return bad(400, 'step_label must be a string')
+    patch.step_label = body.step_label
+  }
+  if (body.state !== undefined) {
+    if (typeof body.state !== 'string') return bad(400, 'state must be a string')
+    patch.state = body.state
+  }
+  if (Object.keys(patch).length === 0) {
+    return bad(400, 'Body must include at least one of current_step, step_label, state')
+  }
+
+  return supabase(env, `/sequence_enrollments?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(patch),
   })
 }
