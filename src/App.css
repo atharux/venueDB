@@ -2531,6 +2531,29 @@ tbody td {
   text-align: center;
 }
 
+/* Sequences board (#10) — a real, full-width kanban, so it gets more room
+   than the compact mock preview it borrows classes from. */
+.sequence-kanban {
+  gap: 12px;
+}
+.sequence-kanban .mock-kanban-col {
+  min-width: 160px;
+}
+.sequence-kanban .mock-kanban-card {
+  cursor: pointer;
+  white-space: normal;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sequence-kanban .mock-kanban-card:hover {
+  border-color: var(--accent);
+}
+.sequence-kanban-step {
+  font-size: 9px;
+  color: var(--text-faint);
+}
+
 /* ── Mock campaign builder ── */
 .mock-cb {
   display: flex;

@@ -16,14 +16,16 @@ import { SettingsModal, loadBrandTheme } from './components/SettingsModal'
 import type { BrandTheme } from './components/SettingsModal'
 import { AboutModal } from './components/AboutModal'
 import { RegionAuditModal } from './components/RegionAuditModal'
+import { SequencesBoard } from './components/SequencesBoard'
 import { exportJson, exportCsv } from './storage'
 import { scraperEnabled } from './scraper'
 import { CITIES } from './types'
 import type { City, Category, OutreachStatus, Tag, Venue } from './types'
+import { useSequenceDemoUnlocked } from './sequenceDemoUnlock'
 import './App.css'
 
 type EntityType = 'venue' | 'festival'
-type TabId = 'venues' | 'festivals' | 'dashboard' | 'discover' | 'map'
+type TabId = 'venues' | 'festivals' | 'dashboard' | 'discover' | 'map' | 'sequences'
 
 interface TableFilters {
   city?: City | ''
@@ -51,6 +53,7 @@ export default function App() {
 
 function AppInner() {
   const { venues, loading, error, add, update, remove, cleanupDuplicates, cleanupPhones, normaliseAll, storageMode, recentlyAddedIds } = useVenues()
+  const sequencingUnlocked = useSequenceDemoUnlocked()
   const [tab, setTab] = useState<TabId>('venues')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tableFilters, setTableFilters] = useState<TableFilters | undefined>(undefined)
@@ -171,6 +174,14 @@ function AppInner() {
             <button className={tab === 'map' ? 'active' : ''} onClick={() => setTab('map')}>
               🗺 Map
             </button>
+            {/* Hidden unless the sequencing demo unlock has fired (#10) —
+                same rule as the paid-feature UI in OutreachPanel: invisible
+                to the client, visible only for a live sales demo. */}
+            {sequencingUnlocked ? (
+              <button className={tab === 'sequences' ? 'active' : ''} onClick={() => setTab('sequences')}>
+                Sequences
+              </button>
+            ) : null}
           </div>
 
           <div className="tab-group-sep" aria-hidden="true" />
@@ -369,6 +380,9 @@ function AppInner() {
               onSelect={setSelectedId}
               selectedId={selectedId}
             />
+          ) : null}
+          {tab === 'sequences' && sequencingUnlocked ? (
+            <SequencesBoard onSelectVenue={setSelectedId} />
           ) : null}
         </div>
 

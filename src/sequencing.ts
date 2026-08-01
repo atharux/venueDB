@@ -66,6 +66,23 @@ export function renderStepBody(body: string, venue: Venue): string {
   return body.replaceAll('{{firstName}}', firstName).replaceAll('{{venueName}}', venue.name)
 }
 
+export interface SequenceEnrollmentWithVenue extends SequenceEnrollment {
+  venues: { name: string } | null
+}
+
+// Walking-skeleton step 4 (#10): every enrollment across all venues, for the
+// dashboard board. Uses PostgREST's embed syntax (sequence_enrollments.venue_id
+// → venues.id FK) to get the venue name in one request, not N+1.
+export async function listAllEnrollments(): Promise<SequenceEnrollmentWithVenue[]> {
+  if (!sequencingEnabled) return []
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/sequence_enrollments?select=*,venues(name)&order=created_at.desc`,
+    { headers: anonHeaders() },
+  )
+  if (!res.ok) throw new Error(`Supabase ${res.status}: ${await res.text()}`)
+  return (await res.json()) as SequenceEnrollmentWithVenue[]
+}
+
 export async function listSequences(): Promise<SequenceRow[]> {
   if (!sequencingEnabled) return []
   const res = await fetch(`${SUPABASE_URL}/rest/v1/sequences?select=id,name&order=created_at.asc`, {
