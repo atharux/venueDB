@@ -4,9 +4,16 @@ import { STATUSES, STATUS_LABEL } from '../types'
 import { TEMPLATES, copyToClipboard, instagramUrl } from '../outreach'
 import { ProGate } from './ProGate'
 import { DemoUnlock } from './DemoUnlock'
-import { advanceEnrollment, getLatestEnrollment, sequencingEnabled, startSequence } from '../sequencing'
-import type { SequenceEnrollment } from '../sequencing'
-import { SEQUENCE_STEPS } from '../sequenceSteps'
+import {
+  advanceEnrollment,
+  getLatestEnrollment,
+  getSequenceSteps,
+  listSequences,
+  renderStepBody,
+  sequencingEnabled,
+  startSequence,
+} from '../sequencing'
+import type { SequenceEnrollment, SequenceRow, SequenceStepRow } from '../sequencing'
 
 const TEMPLATE_HINTS: Record<string, string> = {
   'ig-intro-short': 'Short cold DM — best for first contact via Instagram',
@@ -28,6 +35,9 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
   const [enrollment, setEnrollment] = useState<SequenceEnrollment | null>(null)
   const [enrollBusy, setEnrollBusy] = useState(false)
   const [enrollError, setEnrollError] = useState<string | null>(null)
+  const [sequences, setSequences] = useState<SequenceRow[]>([])
+  const [selectedSequenceId, setSelectedSequenceId] = useState('')
+  const [steps, setSteps] = useState<SequenceStepRow[]>([])
 
   // Walking-skeleton step 1 (#7): load the real enrollment row, if any, so a
   // reload proves the round trip rather than trusting local state.
@@ -40,11 +50,39 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
       .catch(err => setEnrollError(err instanceof Error ? err.message : String(err)))
   }, [venue.id])
 
+  // Walking-skeleton step 3 (#9): the picker's option list, loaded once —
+  // only one seeded sequence exists today, but this proves the wiring for more.
+  useEffect(() => {
+    if (!sequencingEnabled) return
+    listSequences()
+      .then(rows => {
+        setSequences(rows)
+        setSelectedSequenceId(prev => prev || rows[0]?.id || '')
+      })
+      .catch(err => setEnrollError(err instanceof Error ? err.message : String(err)))
+  }, [])
+
+  // Load the enrolled sequence's real steps — needed both to display
+  // progress and to compose the mailto: body for Advance.
+  useEffect(() => {
+    if (!enrollment) {
+      setSteps([])
+      return
+    }
+    getSequenceSteps(enrollment.sequence_id)
+      .then(setSteps)
+      .catch(err => setEnrollError(err instanceof Error ? err.message : String(err)))
+  }, [enrollment?.sequence_id])
+
   const handleStartSequence = async () => {
+    if (!selectedSequenceId) return
     setEnrollBusy(true)
     setEnrollError(null)
     try {
-      setEnrollment(await startSequence(venue.id))
+      const sequenceSteps = await getSequenceSteps(selectedSequenceId)
+      const enrolled = await startSequence(venue.id, selectedSequenceId, sequenceSteps[0]?.subject ?? 'Step 1')
+      setSteps(sequenceSteps)
+      setEnrollment(enrolled)
     } catch (err) {
       setEnrollError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -56,16 +94,17 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
   // (matches the existing "Open email" channel button — pure navigation),
   // then persist the advance. If the mailto never gets sent, the enrollment
   // still advances — same trust model as "Mark as contacted" above.
+  // Step 3 (#9): step content now comes from the real sequence_steps rows.
   const handleAdvance = async () => {
     if (!enrollment) return
-    const step = SEQUENCE_STEPS[enrollment.current_step]
+    const step = steps[enrollment.current_step]
     if (step && venue.email) {
-      window.location.href = `mailto:${venue.email}?subject=${encodeURIComponent(step.subject)}&body=${encodeURIComponent(step.body(venue))}`
+      window.location.href = `mailto:${venue.email}?subject=${encodeURIComponent(step.subject)}&body=${encodeURIComponent(renderStepBody(step.body, venue))}`
     }
     setEnrollBusy(true)
     setEnrollError(null)
     try {
-      setEnrollment(await advanceEnrollment(enrollment))
+      setEnrollment(await advanceEnrollment(enrollment, steps))
     } catch (err) {
       setEnrollError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -217,10 +256,11 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
       </div>
 
       {/* Sequencing walking-skeleton: #7 proved enroll → persist → read-back.
-          #8 adds the real cadence mechanic (multi-step, advance, mailto).
-          Templates/dashboard land in #9/#10. Paid feature: locked behind
-          DemoUnlock, separate from the client's own passcode — only
-          unlocks for a live sales demo. */}
+          #8 added the cadence mechanic (multi-step, advance, mailto).
+          #9 makes the cadence itself a real DB row (sequences/sequence_steps)
+          with a picker, replacing the hardcoded array. Dashboard/auto-enroll
+          land in #10/#11. Paid feature: locked behind DemoUnlock, separate
+          from the client's own passcode — only unlocks for a live sales demo. */}
       <DemoUnlock>
         <div className="sequence-row">
           {!sequencingEnabled ? (
@@ -228,20 +268,30 @@ export function OutreachPanel({ venue, onStatusChange }: Props) {
               Start sequence
             </button>
           ) : !enrollment ? (
-            <button className="primary-btn" onClick={handleStartSequence} disabled={enrollBusy}>
-              {enrollBusy ? 'Starting…' : 'Start sequence'}
-            </button>
+            <>
+              <label className="field">
+                <span className="field-label">Sequence</span>
+                <select value={selectedSequenceId} onChange={e => setSelectedSequenceId(e.target.value)}>
+                  {sequences.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </label>
+              <button className="primary-btn" onClick={handleStartSequence} disabled={enrollBusy || !selectedSequenceId}>
+                {enrollBusy ? 'Starting…' : 'Start sequence'}
+              </button>
+            </>
           ) : enrollment.state === 'done' ? (
-            <div className="muted small">Sequence complete — {SEQUENCE_STEPS.length} of {SEQUENCE_STEPS.length} steps sent</div>
+            <div className="muted small">Sequence complete — {steps.length} of {steps.length} steps sent</div>
           ) : (
             <>
               <div className="muted small">
-                Step {enrollment.current_step + 1} of {SEQUENCE_STEPS.length}: {enrollment.step_label}
+                Step {enrollment.current_step + 1} of {steps.length || '…'}: {enrollment.step_label}
               </div>
               <button
                 className="primary-btn"
                 onClick={handleAdvance}
-                disabled={enrollBusy}
+                disabled={enrollBusy || steps.length === 0}
                 title={venue.email ? 'Opens your email client for this step, then advances' : 'No email set — advances without opening mail'}
               >
                 {enrollBusy ? 'Advancing…' : 'Advance to next step'}
