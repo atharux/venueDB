@@ -12,14 +12,32 @@ const SEQUENCE = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', '
 
 let unlocked = typeof sessionStorage !== 'undefined' && sessionStorage.getItem(SESSION_KEY) === 'true'
 let buffer: string[] = []
+let lastKeyAt = 0
 const listeners = new Set<() => void>()
 
+// The sequence spans arrow keys on a page that scrolls on arrow keys, so
+// holding one (OS auto-repeat) is the natural way to type it — and a single
+// stray repeated keydown mid-sequence used to silently kill the whole
+// attempt with no feedback. Ignore repeats, and reset a stale partial
+// attempt after a pause so an old buffer can't poison a fresh retry.
 function handleKeydown(e: KeyboardEvent) {
   if (unlocked) return
+  if (e.repeat) return
+  if (e.ctrlKey || e.metaKey || e.altKey) return
+
+  const now = Date.now()
+  if (now - lastKeyAt > 3000) buffer = []
+  lastKeyAt = now
+
   buffer = [...buffer, e.key.toLowerCase()].slice(-SEQUENCE.length)
   if (buffer.length === SEQUENCE.length && buffer.every((k, i) => k === SEQUENCE[i])) {
     unlocked = true
-    sessionStorage.setItem(SESSION_KEY, 'true')
+    try {
+      sessionStorage.setItem(SESSION_KEY, 'true')
+    } catch {
+      // Best-effort persistence — Safari private mode throws on setItem.
+      // Unlock still works for the rest of this page load either way.
+    }
     listeners.forEach(l => l())
   }
 }
