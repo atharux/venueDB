@@ -7,6 +7,7 @@ import { ScrapeButton } from './ScrapeButton'
 import { enrichLead, scraperEnabled } from '../scraper'
 import { loadAiSettings } from '../aiSettings'
 import { autoEnrollIfNeeded } from '../sequencing'
+import { useSequenceDemoUnlocked } from '../sequenceDemoUnlock'
 
 interface Props {
   venue: Venue
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
+  const sequencingUnlocked = useSequenceDemoUnlocked()
   const [enriching, setEnriching] = useState(false)
   const [enrichNote, setEnrichNote] = useState<string | null>(null)
   const [verifierName, setVerifierName] = useState(
@@ -51,7 +53,10 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
         // one — auto-enroll it in the default sequence. Only fires on a
         // genuinely NEW email (patch.email is only set when venue.email was
         // previously empty, see above), not on every enrichment run.
-        if (patch.email) {
+        // Also gated by the same hidden demo-unlock as the rest of
+        // sequencing — without it, this must stay a no-op so the paid
+        // feature never writes real data for a user who hasn't unlocked it.
+        if (patch.email && sequencingUnlocked) {
           const enrolled = await autoEnrollIfNeeded(venue.id)
           if (enrolled) note += ' · auto-enrolled in sequence'
         }
