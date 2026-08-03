@@ -1,8 +1,8 @@
 // Sequencing walking-skeleton. Step 1 (#7): enroll a venue, read the real row
 // back. Step 2 (#8): advance through a cadence. Step 3 (#9): cadence content
 // is real DB rows (sequences/sequence_steps), not a hardcoded array — a
-// picker chooses which sequence to enroll into. Dashboard board (#10) and
-// auto-enroll (#11) are next.
+// picker chooses which sequence to enroll into. Step 4 (#10): read-only
+// dashboard board. Step 5 (#11): auto-enroll on email discovery.
 //
 // Same read/write split as storage.ts: reads go straight to Supabase with the
 // anon key (RLS read-only), writes go through the /api/enrollments proxy
@@ -149,4 +149,32 @@ export async function advanceEnrollment(
   if (!res.ok) throw new Error(`Write proxy ${res.status}: ${await res.text()}`)
   const rows = (await res.json()) as SequenceEnrollment[]
   return rows[0]
+}
+
+// Walking-skeleton step 5 (#11): enroll a venue into the default sequence the
+// moment enrichment gives it its first email. "Default" means the first
+// sequence returned by listSequences — there's exactly one seeded (#9), so
+// this is the hardcoded-default behaviour the issue calls for without
+// baking a specific UUID into client code. Returns whether it enrolled, so
+// the caller can surface it; never throws — a sequencing hiccup must not
+// block reporting the enrichment result itself.
+export async function autoEnrollIfNeeded(venueId: string): Promise<boolean> {
+  if (!sequencingEnabled) return false
+  try {
+    const existing = await getLatestEnrollment(venueId)
+    if (existing) return false // never double-enroll
+
+    const sequences = await listSequences()
+    const defaultSequence = sequences[0]
+    if (!defaultSequence) return false
+
+    const steps = await getSequenceSteps(defaultSequence.id)
+    if (!steps[0]) return false
+
+    await startSequence(venueId, defaultSequence.id, steps[0].subject)
+    return true
+  } catch (err) {
+    console.warn('autoEnrollIfNeeded failed', err)
+    return false
+  }
 }

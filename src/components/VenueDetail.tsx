@@ -6,6 +6,7 @@ import { facebookUrl, instagramUrl, websiteUrl } from '../outreach'
 import { ScrapeButton } from './ScrapeButton'
 import { enrichLead, scraperEnabled } from '../scraper'
 import { loadAiSettings } from '../aiSettings'
+import { autoEnrollIfNeeded } from '../sequencing'
 
 interface Props {
   venue: Venue
@@ -45,7 +46,16 @@ export function VenueDetail({ venue, onUpdate, onDelete, onClose }: Props) {
 
       if (Object.keys(patch).length > 0) {
         onUpdate(venue.id, patch)
-        setEnrichNote(`Found: ${Object.keys(patch).join(', ')}`)
+        let note = `Found: ${Object.keys(patch).join(', ')}`
+        // Walking-skeleton step 5 (#11): a venue that had no email just got
+        // one — auto-enroll it in the default sequence. Only fires on a
+        // genuinely NEW email (patch.email is only set when venue.email was
+        // previously empty, see above), not on every enrichment run.
+        if (patch.email) {
+          const enrolled = await autoEnrollIfNeeded(venue.id)
+          if (enrolled) note += ' · auto-enrolled in sequence'
+        }
+        setEnrichNote(note)
       } else {
         setEnrichNote('Nothing new found')
       }
